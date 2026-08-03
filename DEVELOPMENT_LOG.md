@@ -179,17 +179,18 @@
 - **测试**: 25/25 通过, 87% 覆盖率
 - **Git**: 待提交
 
+### Module 12: API + Webhook 层 ✅
+
+- **类型**: 开发
+- **核心实现**: FastAPI应用工厂/API Key鉴权/9个端点/Webhook HMAC签名校验/幂等去重
+- **测试**: 40/40 通过
+- **Git**: 待提交
+
 ### 待执行
 
-- [ ] Module 12: API + Webhook 层
 - [ ] Module 13: Celery Task 层
 - [ ] Module 14: CLI 工具
-- [ ] Module 15-18: 全链路集成测试 + 部署验证
-- [ ] Module 15-18: 全链路测试/部署
-- [ ] Module 5: preprocess/ 模块
-- [ ] Module 6: engine/ 层
-- [ ] Module 7-9: Agent 核心（安全审计、冲突消解、安全主链路联调）
-- [ ] Module 10-14: 辅助Agent + 集成 + 接入层
+- [ ] Module 15-18: 全链路测试 + 部署
 - [ ] Module 15-18: 交付与测试
 
 ---

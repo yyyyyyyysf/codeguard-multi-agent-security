@@ -248,7 +248,7 @@ src/
 | **Module 10: Reporter Agent** | ✅ | 18/18 ✅ | **84%** |
 | 🎉 **全部 4 个 Agent 完成** | | | |
 | **Module 11: Integrations** | ✅ | 25/25 ✅ | **87%** |
-| Module 12: API + Webhook | ⬜ | - | - |
+| **Module 12: API + Webhook** | ✅ | 40/40 ✅ | **79%** |
 | Module 13: Celery Tasks | ⬜ | - | - |
 | Module 14: CLI | ⬜ | - | - |
 | Module 15-18: 测试/部署 | ⬜ | - | - |
