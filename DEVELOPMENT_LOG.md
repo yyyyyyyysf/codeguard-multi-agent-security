@@ -145,7 +145,7 @@
   - `agent.py`: MigrationAssessmentAgent(BaseAgent), AST→LLM→去重→风险评估→工作量预估
 - **LLM边界落实**: LLM仅映射KNOWN Breaking Changes到代码行, source标记, 故障降级AST-only
 - **测试**: 40/40 通过, 88% 覆盖率 (models 100%, changelog_matcher 96%, agent 85%, llm_analyzer 79%)
-- **Git**: 待提交
+- **Git**: `c10ba1c`
 
 ### Module 10: 报告聚合 Agent ✅
 
@@ -169,14 +169,22 @@
 | 报告聚合 | 18/18 | 84% |
 | **总计** | **141/141** | **87% avg** |
 
+### Module 11: Integrations 层 ✅
+
+- **类型**: 开发
+- **核心实现**:
+  - `github_client.py`: Check Runs创建/更新, PR评论CRUD+幂等, 429/5xx重试, Token环境变量注入 (86%覆盖)
+  - `webhook_sender.py`: HMAC-SHA256签名, 指数退避重试, 事件分级回调 (90%覆盖)
+- **红线落实**: 防腐层零业务逻辑, 外部故障不抛异常, 签名对齐入站Webhook
+- **测试**: 25/25 通过, 87% 覆盖率
+- **Git**: 待提交
+
 ### 待执行
 
-- [ ] Module 11: integrations 层 (GitHub Client + Webhook Sender)
 - [ ] Module 12: API + Webhook 层
 - [ ] Module 13: Celery Task 层
 - [ ] Module 14: CLI 工具
 - [ ] Module 15-18: 全链路集成测试 + 部署验证
-- [ ] Module 11-14: 集成层/API/Webhook/CLI
 - [ ] Module 15-18: 全链路测试/部署
 - [ ] Module 5: preprocess/ 模块
 - [ ] Module 6: engine/ 层
