@@ -133,15 +133,25 @@
 - **遗留优化点**:
   - 人在回路当前仅支持单次暂停, 后续可扩展为多轮对话
   - auto_resolver 规则优先级暂不支持排序配置, 后续可追加 `rule_order` 配置
+- **Git**: `55541c7`
+
+### Module 9: 迁移评估 Agent ✅
+
+- **类型**: 开发
+- **核心实现**:
+  - `models.py`: MigrationReport/BreakingChangeImpact/AffectedFile/EffortEstimate (Pydantic, 100%覆盖)
+  - `changelog_matcher.py`: AST+regex匹配, is_code_file过滤, impact_level分类
+  - `llm_analyzer.py`: LLM辅助代码映射, 严格prompt约束, JSON解析+已知BC校验防幻觉
+  - `agent.py`: MigrationAssessmentAgent(BaseAgent), AST→LLM→去重→风险评估→工作量预估
+- **LLM边界落实**: LLM仅映射KNOWN Breaking Changes到代码行, source标记, 故障降级AST-only
+- **测试**: 40/40 通过, 88% 覆盖率 (models 100%, changelog_matcher 96%, agent 85%, llm_analyzer 79%)
 - **Git**: 待提交
 
 ### 待执行
 
-- [ ] Module 9: 迁移评估 Agent
-- [ ] Module 9: 迁移评估 Agent
 - [ ] Module 10: 报告聚合 Agent
 - [ ] Module 11-14: 集成层/API/Webhook/CLI
-- [ ] Module 15-18: 全链路测试/部署（CVE缓存、OSV客户端、审计日志、规则存储、报告存储）
+- [ ] Module 15-18: 全链路测试/部署
 - [ ] Module 5: preprocess/ 模块
 - [ ] Module 6: engine/ 层
 - [ ] Module 7-9: Agent 核心（安全审计、冲突消解、安全主链路联调）
