@@ -147,9 +147,35 @@
 - **测试**: 40/40 通过, 88% 覆盖率 (models 100%, changelog_matcher 96%, agent 85%, llm_analyzer 79%)
 - **Git**: 待提交
 
+### Module 10: 报告聚合 Agent ✅
+
+- **类型**: 开发
+- **核心实现**:
+  - `models.py`: AggregatedReport/ReportSummary (Pydantic, 100%覆盖)
+  - `agent.py`: ReportAggregationAgent(BaseAgent), Jinja2渲染, security-first分级输出, plain-text fallback (82%覆盖)
+  - `templates/pr_comment.md`: Markdown PR评论模板(阻断项→建议项→通过项三段式)
+  - `templates/full_report.html`: 完整HTML报告模板(含CSS样式/风险评估/工作量预估)
+- **红线落实**: 永不修改上游业务结论, 永不新增风险规则, 安全结果优先输出
+- **测试**: 18/18 通过, 84% 覆盖率
+- **Git**: 待提交
+
+### 🎉 全部 4 个 Agent 开发完成
+
+| Agent | Tests | Coverage |
+|-------|-------|----------|
+| 安全审计 | 34/34 | 89% |
+| 冲突消解 | 49/49 | 87% |
+| 迁移评估 | 40/40 | 88% |
+| 报告聚合 | 18/18 | 84% |
+| **总计** | **141/141** | **87% avg** |
+
 ### 待执行
 
-- [ ] Module 10: 报告聚合 Agent
+- [ ] Module 11: integrations 层 (GitHub Client + Webhook Sender)
+- [ ] Module 12: API + Webhook 层
+- [ ] Module 13: Celery Task 层
+- [ ] Module 14: CLI 工具
+- [ ] Module 15-18: 全链路集成测试 + 部署验证
 - [ ] Module 11-14: 集成层/API/Webhook/CLI
 - [ ] Module 15-18: 全链路测试/部署
 - [ ] Module 5: preprocess/ 模块
