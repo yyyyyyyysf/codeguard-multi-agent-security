@@ -1,0 +1,41 @@
+# FastAPI Breaking Changes: 0.100.0 -> 0.110.0
+# Source: https://fastapi.tiangolo.com/release-notes/
+# Used by MigrationAssessment Agent for deterministic impact analysis.
+
+framework: fastapi
+from_version: "0.100.0"
+to_version: "0.110.0"
+
+breaking_changes:
+  - id: "FASTAPI-BC-001"
+    description: "`response_model` parameter removed from `@app.get()` decorator"
+    severity: high
+    deprecated_api: "response_model"
+    affected_patterns:
+      - "response_model="
+      - "@app.get"
+      - "@app.post"
+      - "@app.put"
+      - "@app.delete"
+    official_url: "https://fastapi.tiangolo.com/release-notes/"
+    migration_guide: "Use Python return type annotations instead of `response_model` parameter."
+
+  - id: "FASTAPI-BC-002"
+    description: "`OpenAPI` class import path changed from `fastapi.openapi.utils` to `fastapi.openapi`"
+    severity: medium
+    deprecated_api: "get_openapi"
+    affected_patterns:
+      - "from fastapi.openapi.utils import"
+      - "get_openapi("
+    official_url: "https://fastapi.tiangolo.com/release-notes/"
+    migration_guide: "Update import to `from fastapi.openapi import get_openapi`."
+
+  - id: "FASTAPI-BC-003"
+    description: "Deprecated `on_event` hooks replaced by lifespan context manager"
+    severity: medium
+    deprecated_api: "on_event"
+    affected_patterns:
+      - "@app.on_event("
+      - ".on_event("
+    official_url: "https://fastapi.tiangolo.com/release-notes/"
+    migration_guide: "Replace `@app.on_event()` with `@asynccontextmanager` lifespan."
