@@ -193,10 +193,52 @@
 - **测试**: 14/14 通过
 - **Git**: 待提交
 
-### 待执行
+### Module 14: CLI 工具 ✅
 
-- [ ] Module 14: CLI 工具
-- [ ] Module 15-18: 全链路测试 + 部署
+- **类型**: 开发
+- **核心实现**: `src/cli/main.py` (Typer CLI), `analyze` command (local pre-check), `--target`, `--json`, `--output`
+- **Git**: 待提交
+
+### Module 15-18: 集成测试 + 部署验证 ✅
+
+- **类型**: 测试/部署
+- **核心实现**:
+  - `tests/integration/test_full_pipeline.py`: 端到端流程验证(preprocess->security->conflict->report), 降级流, 幂等流
+  - `README.md`: 项目首页(架构图/快速开始/API/技术栈/统计数据)
+  - Docker Compose一键部署验证
+- **测试**: 4/4 集成测试通过
+
+---
+
+## 🎉 项目完成总结
+
+| 指标 | 数值 |
+|------|------|
+| 总模块数 | 14 |
+| 总测试数 | **238 passed** |
+| Agent 覆盖率 (avg) | **87%** |
+| Python 代码行数 | ~6,000+ |
+| Git 提交数 | 14 |
+| 开发周期 | 2026-08-03 (1天) |
+
+### 模块清单
+
+1. 项目骨架 ✅
+2. core/ ✅
+3. utils/ ✅
+4. storage/ ✅
+5. preprocess/ ✅
+6. engine/ ✅
+7. Security Agent ✅ (40 tests, 89%)
+8. Conflict Agent ✅ (57 tests, 87%)
+9. Migration Agent ✅ (40 tests, 88%)
+10. Reporter Agent ✅ (18 tests, 84%)
+11. Integrations ✅ (25 tests, 87%)
+12. API + Webhook ✅ (40 tests)
+13. Celery Tasks ✅ (14 tests)
+14. CLI + 集成测试 ✅ (4 tests)
+
+> **最后更新**: 2026-08-03
 - [ ] Module 15-18: 交付与测试
 
 ---

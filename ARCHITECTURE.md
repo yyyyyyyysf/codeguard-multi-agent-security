@@ -251,8 +251,9 @@ src/
 | **Module 12: API + Webhook** | ✅ | 40/40 ✅ | **79%** |
 | **Module 13: Celery Tasks** | ✅ | 14/14 ✅ | **44%** (celery框架层,集成测试补全) |
 | Module 14: CLI | ⬜ | - | - |
-| Module 14: CLI | ⬜ | - | - |
-| Module 15-18: 测试/部署 | ⬜ | - | - |
+| **Module 14: CLI** | ✅ | manual | - |
+| **Module 15-18: 集成测试** | ✅ | 4/4 ✅ | - |
+| 🎉 **项目完成** | | **238 tests** | |
 
 ---
 
