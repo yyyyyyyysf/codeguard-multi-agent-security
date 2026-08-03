@@ -243,7 +243,7 @@ src/
 | Module 5: preprocess/ | ✅ | 手动 | N/A |
 | Module 6: engine/ | ✅ | 手动 | N/A |
 | **Module 7: Security Agent** | ✅ | 34/34 ✅ | **89%** |
-| Module 8: Conflict Agent | ⬜ | - | - |
+| **Module 8: Conflict Agent** | ✅ | 49/49 ✅ | **87%** |
 | Module 9: Migration Agent | ⬜ | - | - |
 | Module 10: Reporter Agent | ⬜ | - | - |
 | Module 11: Integrations | ⬜ | - | - |

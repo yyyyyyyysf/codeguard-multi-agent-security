@@ -112,11 +112,32 @@
 - **遗留优化点**:
   - Semgrep SDK 模式标注为"待Semgrep SDK稳定后替换CLI fallback"
   - cve_db_version 字段待 CVE cache 同步时动态填充
+- **Git**: `b05ae1c`
+
+### Module 8: 冲突消解 Agent ✅
+
+- **类型**: 开发
+- **核心实现**:
+  - `models.py`: FinalSecurityDecision/SecurityVerdict/AuditTrail/AuditEntry/ResolutionConfig (Pydantic, 100%覆盖)
+  - `auto_resolver.py`: 5条裁决规则引擎, 规则优先级索引, O(1)白名单查询, semver版本比较, glob路径匹配
+  - `human_loop.py`: LangGraph StateGraph人在回路, 6个节点+条件路由, MemorySaver checkpoint, 超时fail-safe
+  - `agent.py`: ConflictResolutionAgent(继承BaseAgent), 自动裁决→人在回路→审计日志完整链路
+- **安全红线落实**:
+  - 零 LLM（裁决逻辑全确定性规则 + 人工输入）
+  - Critical 不可人工豁免
+  - 超时 fail-safe 默认 block
+  - 审计日志 append-only（所有裁决 + 人工操作记录）
+- **裁决规则全分支覆盖**: CVE白名单/路径白名单/升级自动修复/高危阻断/低置信度放行/默认规则/always_blocking规则
+- **测试**: 49/49 通过, 87% 覆盖率 (models 100%, human_loop 94%, auto_resolver 85%, agent 71%)
+- **文档**: 模块 README (裁决规则表/人在回路流程/配置项)、ARCHITECTURE 同步
+- **遗留优化点**:
+  - 人在回路当前仅支持单次暂停, 后续可扩展为多轮对话
+  - auto_resolver 规则优先级暂不支持排序配置, 后续可追加 `rule_order` 配置
 - **Git**: 待提交
 
 ### 待执行
 
-- [ ] Module 8: 冲突消解 Agent (自动裁决引擎 + 人在回路)
+- [ ] Module 9: 迁移评估 Agent
 - [ ] Module 9: 迁移评估 Agent
 - [ ] Module 10: 报告聚合 Agent
 - [ ] Module 11-14: 集成层/API/Webhook/CLI
