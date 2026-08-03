@@ -41,10 +41,91 @@
   - 创建 docs/specs/codeguard-v0.1-design-spec.md：完整设计规格（MVP 开发唯一依据）
   - 创建 DEVELOPMENT_LOG.md：本文件
 
+### 架构评审通过
+
+- **类型**: 评审
+- **内容**:
+  - 评审结论：未发现架构级问题，设计自洽性验证通过
+  - 识别 6 项潜在风险并制定缓解措施
+  - 输出 6 条优化建议（高/中/低优先级）
+  - 推荐开发顺序：6 个 Phase，MVP 总预估 19-26 天
+
+---
+
+## 2026-08-03 — Phase 1: 基础设施开发
+
+### Module 1: 项目骨架搭建 ✅
+
+- **类型**: 开发
+- **内容**:
+  - `pyproject.toml`: 完整依赖声明，FastAPI + Celery + Redis + LangGraph + Tree-sitter + Pydantic + dev/llm/semgrep 可选组
+  - `Dockerfile`: Python 3.11-slim，非 root 用户，git + build-essential
+  - `docker-compose.yml`: api (uvicorn --reload) + worker (celery) + redis 三服务编排，健康检查
+  - `.env.example`: 19 项配置（Server / Redis / Celery / DB / GitHub / LLM / OSV / Security / RateLimit）
+  - `.gitignore`: 完整排除规则（.env, __pycache__, data/, logs/, .mypy_cache/, docker-compose.override.yml）
+  - `src/`: 15 个子包，完整 `__init__.py` 初始化
+- **测试**: 骨架无需测试
+- **Git**: `f225ea4` - 【chore】项目骨架
+
+### Module 2: core/ 层 ✅
+
+- **类型**: 开发
+- **内容**:
+  - `errors.py`: CodeGuardError 基类 + 12 个子类（Task/Analysis/ExternalService/Security 4 族），每个异常自带 code/http_status/retryable，支持 `to_dict()` JSON 序列化
+  - `models.py`: 18 个枚举（Severity/Confidence/ScanScope/ScanStatus/Verdict/RiskLevel/DependencyType/Ecosystem 等），`Severity.from_cvss()` 工厂方法，`is_blocking` 属性
+  - `constants.py`: 40+ 全局常量（Redis Key 模板、超时/SLA、缓存、沙箱限制、文件过滤），按功能域分组，Final 声明
+- **测试**: 手动验证通过（异常、枚举、常量导入正常）
+- **Git**: `b8a5bac` - 【feat】core层
+
+### Module 3: utils/ 层 ✅
+
+- **类型**: 开发
+- **内容**:
+  - `git.py`: clone/pull/diff/commit 操作封装（GitPython），timeout 保护
+  - `hashing.py`: HMAC-SHA256 签名校验（GitHub webhook 格式 + CodeGuard 回调格式）
+  - `retry.py`: 指数退避重试装饰器，仅重试 `retryable=True` 异常
+  - `logging.py`: structlog 结构化日志，dev（彩色控制台）/ production（JSON）模式
+  - `id_gen.py`: UUID v4 生成器，含 `is_valid_uuid()` 校验
+  - `sandbox.py`: subprocess 沙箱执行，timeout + 内存限制，Windows/Unix 跨平台兼容
+- **测试**: 手动验证通过（hashing、id_gen、sandbox、retry 均正确工作，含 Windows 兼容性修复）
+- **Git**: `a2f707a` - 【feat】utils层
+
+---
+
+## 2026-08-03 — Phase 3: Agent 核心开发
+
+### Module 7: 安全审计 Agent ✅
+
+- **类型**: 开发
+- **核心实现**:
+  - `models.py`: SecurityReport/Vulnerability/CodeIssue/SecurityScanConfig (Pydantic, 100% 覆盖)
+  - `cve_scanner.py`: 3级缓存CVE扫描, direct/transitive分类阻断逻辑, file_location标注
+  - `code_scanner.py`: Semgrep规则引擎集成, SDK+CLI双模式, 置信度分级(high/medium/low), 阻断规则分类
+  - `agent.py`: SecurityAuditAgent(继承BaseAgent), 双管线并行扫描, 独立降级, 内部degraded传播到agent级别
+- **安全红线落实**:
+  - 零 LLM 调用（所有结论来自 OSV/GitHub Advisory + Semgrep 确定性规则）
+  - 证据链溯源（evidence_source/evidence_url 每个 finding 必填）
+  - 阻断分级（direct+high=block, transitive+medium=info, hardcoded-secrets=always_block）
+  - 降级不静默（degraded_reasons 显式标注）
+- **测试**: 34/34 通过, 89% 覆盖率 (models 100%, agent 92%, cve_scanner 81%, code_scanner 85%)
+- **文档**: 模块 README 完成 (输入/输出/配置/降级策略), ARCHITECTURE.md 同步模块状态
+- **遗留优化点**:
+  - Semgrep SDK 模式标注为"待Semgrep SDK稳定后替换CLI fallback"
+  - cve_db_version 字段待 CVE cache 同步时动态填充
+- **Git**: 待提交
+
 ### 待执行
 
-- [ ] 架构评审（下步计划）
-- [ ] MVP 模块开发（Phase 1-5）
+- [ ] Module 8: 冲突消解 Agent (自动裁决引擎 + 人在回路)
+- [ ] Module 9: 迁移评估 Agent
+- [ ] Module 10: 报告聚合 Agent
+- [ ] Module 11-14: 集成层/API/Webhook/CLI
+- [ ] Module 15-18: 全链路测试/部署（CVE缓存、OSV客户端、审计日志、规则存储、报告存储）
+- [ ] Module 5: preprocess/ 模块
+- [ ] Module 6: engine/ 层
+- [ ] Module 7-9: Agent 核心（安全审计、冲突消解、安全主链路联调）
+- [ ] Module 10-14: 辅助Agent + 集成 + 接入层
+- [ ] Module 15-18: 交付与测试
 
 ---
 

@@ -232,5 +232,27 @@ src/
 
 ---
 
+## 八、模块开发状态
+
+| 模块 | 状态 | 测试 | 覆盖 |
+|------|------|------|------|
+| Module 1: 项目骨架 | ✅ | N/A | N/A |
+| Module 2: core/ | ✅ | 手动 | N/A |
+| Module 3: utils/ | ✅ | 手动 | N/A |
+| Module 4: storage/ | ✅ | 手动 | N/A |
+| Module 5: preprocess/ | ✅ | 手动 | N/A |
+| Module 6: engine/ | ✅ | 手动 | N/A |
+| **Module 7: Security Agent** | ✅ | 34/34 ✅ | **89%** |
+| Module 8: Conflict Agent | ⬜ | - | - |
+| Module 9: Migration Agent | ⬜ | - | - |
+| Module 10: Reporter Agent | ⬜ | - | - |
+| Module 11: Integrations | ⬜ | - | - |
+| Module 12: API + Webhook | ⬜ | - | - |
+| Module 13: Celery Tasks | ⬜ | - | - |
+| Module 14: CLI | ⬜ | - | - |
+| Module 15-18: 测试/部署 | ⬜ | - | - |
+
+---
+
 > **最后更新**: 2026-08-03  
 > **关联**: PROJECT_RULES.md, docs/specs/codeguard-v0.1-design-spec.md
