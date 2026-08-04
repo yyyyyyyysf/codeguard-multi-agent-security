@@ -44,10 +44,12 @@ def clone_or_pull(
     if target.exists() and (target / ".git").exists():
         try:
             repo = Repo(str(target))
-            origin = repo.remotes.origin
-            origin.fetch()
-            repo.git.checkout(branch)
-            origin.pull(branch)
+            # If repo has a remote origin, pull latest
+            if hasattr(repo.remotes, 'origin'):
+                origin = repo.remotes.origin
+                origin.fetch()
+                repo.git.checkout(branch)
+                origin.pull(branch)
             return repo
         except GitError as e:
             raise RepoCloneFailedError(

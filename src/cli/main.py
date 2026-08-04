@@ -88,12 +88,14 @@ def analyze(
         from src.utils.id_gen import generate_task_id
 
         task_id = generate_task_id()
+        from src.core.models import ScanScope
+        scan_scope_enum = ScanScope.FULL if scan_type == "full" else ScanScope.DIFF
         metadata = run_preprocessing(
             repo_url=f"file://{repo}",
             work_dir=str(repo),
             task_id=task_id,
             scan_id=task_id,
-            scan_scope=scan_type,  # type: ignore[arg-type]
+            scan_scope=scan_scope_enum,
             branch=branch,
         )
         dep_count = len(metadata.get("dependencies", []))
@@ -114,7 +116,7 @@ def analyze(
         security_data = security_result.get("data", {})
         vuln_count = len(security_data.get("vulnerabilities", []))
         issue_count = len(security_data.get("code_issues", []))
-        blocking = security_data.get("blocking_count", 0) if hasattr(security_data, "get") else sum(
+        blocking = sum(
             1 for v in security_data.get("vulnerabilities", []) if v.get("blocking")
         ) + sum(1 for i in security_data.get("code_issues", []) if i.get("blocking"))
 

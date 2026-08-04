@@ -1,9 +1,10 @@
-"""Conflict Resolution Agent — Deterministic rule engine + Human-in-the-loop.
+"""Conflict Resolution Agent — LangGraph StateGraph + Human-in-the-loop.
 
-Orchestrates:
-1. Auto-resolver: matches findings against exemption rules (5 core rules).
-2. Human loop: pauses via LangGraph checkpoint for unresolved findings.
-3. Final decision: aggregates all verdicts into FinalSecurityDecision.
+Uses a real LangGraph StateGraph (not manual await) for the security DAG:
+  auto_resolve → [conditional] → human_review (interrupt) → finalize
+
+Checkpoint: LangGraph's MemorySaver persists state at interrupt_before,
+enabling pause/resume across API calls. Thread ID = task_id.
 
 Design invariants:
 - ZERO LLM calls — all verdicts from deterministic rules or human input.
@@ -16,10 +17,13 @@ from __future__ import annotations
 
 import time
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Literal
+
+from langgraph.checkpoint.memory import MemorySaver
+from langgraph.graph import END, StateGraph
+from typing_extensions import TypedDict
 
 from src.agents.conflict.auto_resolver import AutoResolver
-from src.agents.conflict.human_loop import HumanLoopManager
 from src.agents.conflict.models import (
     AuditEntry,
     AuditTrail,
@@ -37,17 +41,51 @@ from src.utils.logging import get_logger
 logger = get_logger(__name__)
 
 
+# ------------------------------------------------------------------
+# LangGraph State
+# ------------------------------------------------------------------
+
+class ConflictState(TypedDict, total=False):
+    """State carried through the security DAG."""
+    security_report: dict[str, Any]
+    exemption_rules: list[dict[str, Any]]
+    is_framework_upgrade: bool
+    target_version: dict[str, str] | None
+    config: dict[str, Any]
+    scan_id: str
+    task_id: str
+    # Auto-resolve outputs
+    auto_resolved: list[dict[str, Any]]
+    unresolved: list[dict[str, Any]]
+    # Human-in-the-loop
+    human_input: dict[str, str] | None    # finding_id -> block|waive|defer
+    human_intervention_required: bool
+    pending_human_items: list[str]
+    # Final output
+    final_decision: dict[str, Any] | None
+    error: str
+
+
+# ------------------------------------------------------------------
+# Agent
+# ------------------------------------------------------------------
+
 class ConflictResolutionAgent(BaseAgent):
-    """Conflict resolution agent: auto-resolve + human-in-the-loop. Zero LLM.
+    """Conflict resolution agent backed by LangGraph StateGraph.
 
     Input:  SecurityReport (from SecurityAuditAgent) + exemption rules
     Output: FinalSecurityDecision (blocking verdict per finding + overall_blocking)
+
+    Graph topology:
+        auto_resolve ──[has unresolved?]──> human_review (INTERRUPT) ──> finalize
+                       ──[all resolved ]──> finalize
     """
 
     agent_id = "conflict_resolution"
     description = (
         "Resolves security findings via deterministic exemption rules and "
-        "human-in-the-loop for edge cases. Zero LLM, full audit trail."
+        "human-in-the-loop for edge cases. Zero LLM, full audit trail. "
+        "Powered by LangGraph StateGraph with native Checkpoint."
     )
 
     def __init__(
@@ -60,102 +98,149 @@ class ConflictResolutionAgent(BaseAgent):
         self._rule_store = rule_store
         self._audit_logger = audit_logger
         self._default_timeout = human_loop_timeout_hours
+        self._graph = self._build_graph()
 
     # ------------------------------------------------------------------
-    # Core logic
+    # Graph construction
     # ------------------------------------------------------------------
 
-    async def run(self, **kwargs: Any) -> dict[str, Any]:
-        """Execute conflict resolution on a SecurityReport.
+    def _build_graph(self):
+        """Build the LangGraph StateGraph for security conflict resolution.
 
-        Args:
-            security_report: SecurityReport dict from SecurityAuditAgent.
-            code_metadata: CodeMetadata dict (for context like upgrade detection).
-            config: Optional ResolutionConfig overrides.
-
-        Returns:
-            FinalSecurityDecision as dict.
+        Nodes:
+            auto_resolve  — Run 5-rule engine, split resolved/unresolved.
+            human_review  — INTERRUPT point: wait for human input.
+            finalize      — Assemble FinalSecurityDecision + audit log.
         """
-        security_report = kwargs.get("security_report", {})
-        code_metadata = kwargs.get("code_metadata", {})
-        config_dict = kwargs.get("config", {})
-        task_id = kwargs.get("task_id", generate_id())
-        scan_id = kwargs.get("scan_id", generate_id())
+        graph = StateGraph(ConflictState)
 
-        config = ResolutionConfig(**config_dict)
-        started = time.monotonic()
+        graph.add_node("auto_resolve", self._auto_resolve_node)
+        graph.add_node("human_review", self._human_review_node)
+        graph.add_node("finalize", self._finalize_node)
 
-        # Load exemption rules
-        rules = []
-        if self._rule_store:
-            try:
-                rules = self._rule_store.get_active_rules()
-            except Exception:
-                rules = []
+        graph.set_entry_point("auto_resolve")
 
-        # Detect if this is a framework upgrade PR
-        target_version = code_metadata.get("target_version") or {}
-        is_framework_upgrade = bool(target_version.get("framework"))
-
-        # --- Step 1: Auto-resolve ---
-        resolver = AutoResolver(rules)
-        resolved, unresolved = resolver.resolve(
-            vulnerabilities=security_report.get("vulnerabilities", []),
-            code_issues=security_report.get("code_issues", []),
-            is_framework_upgrade=is_framework_upgrade,
-            target_version=target_version if target_version else None,
-            config={
-                "critical_cannot_waive": config.critical_cannot_waive,
-                "auto_waive_low_confidence": config.auto_waive_low_confidence,
+        # Conditional: unresolved items? -> human_review, else -> finalize
+        graph.add_conditional_edges(
+            "auto_resolve",
+            self._route_after_resolve,
+            {
+                "human_review": "human_review",
+                "finalize": "finalize",
             },
         )
+        graph.add_edge("human_review", "finalize")
+        graph.add_edge("finalize", END)
 
-        # --- Step 2: Human loop for unresolved ---
-        human_decisions: list[dict[str, Any]] = []
-        human_intervention_required = False
-        pending_ids: list[str] = []
+        return graph.compile(
+            checkpointer=MemorySaver(),
+            interrupt_before=["human_review"],  # ← Pause here for human input
+        )
 
-        if unresolved:
-            human_intervention_required = True
-            pending_ids = [
-                item.get("cve_id") or item.get("rule_id", "") for item in unresolved
-            ]
-            loop = HumanLoopManager(
-                timeout_hours=config.human_loop_timeout_hours,
-                fail_safe_blocking=config.fail_safe_blocking,
+    # ------------------------------------------------------------------
+    # Node: auto_resolve
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _auto_resolve_node(state: ConflictState) -> ConflictState:
+        """Run the 5-rule auto-resolver engine."""
+        security = state.get("security_report", {})
+        rules = state.get("exemption_rules", [])
+        is_upgrade = state.get("is_framework_upgrade", False)
+        target = state.get("target_version")
+
+        resolver = AutoResolver(rules)
+        resolved, unresolved = resolver.resolve(
+            vulnerabilities=security.get("vulnerabilities", []),
+            code_issues=security.get("code_issues", []),
+            is_framework_upgrade=is_upgrade,
+            target_version=target,
+            config=state.get("config", {}),
+        )
+
+        state["auto_resolved"] = resolved
+        state["unresolved"] = unresolved
+        state["human_intervention_required"] = len(unresolved) > 0
+        state["pending_human_items"] = [
+            item.get("cve_id") or item.get("rule_id", "")
+            for item in unresolved
+        ]
+
+        logger.info(
+            "auto_resolve_complete",
+            resolved=len(resolved),
+            unresolved=len(unresolved),
+            needs_human=len(unresolved) > 0,
+        )
+        return state
+
+    # ------------------------------------------------------------------
+    # Routing
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _route_after_resolve(state: ConflictState) -> Literal["human_review", "finalize"]:
+        """Route: if unresolved items exist -> human_review, else -> finalize."""
+        if state.get("unresolved"):
+            return "human_review"
+        return "finalize"
+
+    # ------------------------------------------------------------------
+    # Node: human_review (INTERRUPT point)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _human_review_node(state: ConflictState) -> ConflictState:
+        """Apply human decisions to unresolved items.
+
+        This node is guarded by interrupt_before. LangGraph pauses
+        BEFORE executing this node. When human input arrives,
+        the caller updates state["human_input"] and resumes.
+        """
+        human_input = state.get("human_input") or {}
+        unresolved = state.get("unresolved", [])
+        resolved = list(state.get("auto_resolved", []))
+
+        for item in unresolved:
+            finding_id = (
+                item.get("finding_id")
+                or item.get("cve_id")
+                or item.get("rule_id", "")
             )
+            verdict = human_input.get(finding_id, "block")  # Default: block
 
-            # Request human input (this pauses if checkpoint is active)
-            loop_state = await loop.request_human_input(
-                unresolved, task_id=task_id, scan_id=scan_id
-            )
+            resolved.append({
+                **item,
+                "finding_id": finding_id,
+                "verdict": verdict,
+                "reason": f"Human decision: {verdict}",
+                "rule_id": None,
+                "operator": "human:reviewer",
+                "evidence_link": item.get("evidence_url", ""),
+                "appealable": False,
+            })
 
-            # Check if timed out immediately (e.g., in automated mode)
-            if loop.check_timeout():
-                timeout_verdicts = loop.get_timeout_fallback_verdicts()
-                for item in unresolved:
-                    fid = item.get("cve_id") or item.get("rule_id", "")
-                    verdict = timeout_verdicts.get(fid, "block")
-                    human_decisions.append({
-                        **item,
-                        "verdict": verdict,
-                        "reason": "Human loop timeout — defaulting to block (fail-safe)",
-                        "operator": "system:timeout",
-                        "appealable": True,
-                    })
-                human_intervention_required = False
-                pending_ids = []
+        state["auto_resolved"] = resolved
+        state["unresolved"] = []
+        state["human_intervention_required"] = False
+        state["pending_human_items"] = []
+        return state
 
-        # --- Step 3: Assemble FinalSecurityDecision ---
-        all_verdicts = resolved + human_decisions
+    # ------------------------------------------------------------------
+    # Node: finalize
+    # ------------------------------------------------------------------
+
+    def _finalize_node(self, state: ConflictState) -> ConflictState:
+        """Assemble FinalSecurityDecision from resolved verdicts."""
+        all_resolved = state.get("auto_resolved", [])
+        scan_id = state.get("scan_id", generate_id())
 
         decisions = []
-        for v in all_verdicts:
-            finding_id = v.get("finding_id") or v.get("cve_id") or v.get("rule_id", "")
-            is_vuln = "cve_id" in v or "dependency_type" in v
+        for v in all_resolved:
+            fid = v.get("finding_id") or v.get("cve_id") or v.get("rule_id", "")
             decisions.append(SecurityVerdict(
-                finding_id=finding_id,
-                finding_type="vulnerability" if is_vuln else "code_issue",
+                finding_id=fid,
+                finding_type="vulnerability" if "cve_id" in v or "dependency_type" in v else "code_issue",
                 verdict=v.get("verdict", "block"),
                 reason=v.get("reason", ""),
                 rule_id=v.get("rule_id"),
@@ -164,57 +249,34 @@ class ConflictResolutionAgent(BaseAgent):
                 appealable=v.get("appealable", True),
             ))
 
-        # overall_blocking: True if ANY finding is blocked
         overall_blocking = any(d.verdict == Verdict.BLOCK.value for d in decisions)
+        now = datetime.now(timezone.utc).isoformat()
 
         # Audit trail
-        now = datetime.now(timezone.utc).isoformat()
         audit = AuditTrail()
         audit.append(AuditEntry(
             timestamp=now,
-            action="conflict_resolution_started",
-            detail={"scan_id": scan_id, "findings_count": len(all_verdicts)},
+            action="conflict_resolution_complete",
+            detail={"scan_id": scan_id, "verdicts": len(decisions)},
             operator="system",
             row_hash="",
         ))
-        for d in decisions:
-            audit.append(AuditEntry(
-                timestamp=now,
-                action="verdict_made",
-                detail={
-                    "finding_id": d.finding_id,
-                    "verdict": d.verdict,
-                    "reason": d.reason,
-                    "rule_id": d.rule_id,
-                },
-                operator=d.operator or "auto",
-                evidence_link=d.evidence_link,
-                row_hash="",
-            ))
-
-        if human_intervention_required:
-            audit.append(AuditEntry(
-                timestamp=now,
-                action="human_intervention_required",
-                detail={"pending_findings": pending_ids},
-                operator="system",
-                row_hash="",
-            ))
 
         # Persist audit log
         if self._audit_logger:
-            for entry in audit.entries:
+            task_id = state.get("task_id", "")
+            for d in decisions:
                 try:
                     self._audit_logger.log(
-                        action=entry.action,
-                        operator=entry.operator,
-                        detail=entry.detail,
-                        evidence_link=entry.evidence_link,
+                        action="verdict_made",
+                        operator=d.operator or "auto",
+                        detail={"finding_id": d.finding_id, "verdict": d.verdict, "reason": d.reason},
+                        evidence_link=d.evidence_link,
                         scan_id=scan_id,
                         task_id=task_id,
                     )
                 except Exception:
-                    pass  # Audit log failure is non-fatal for security decision
+                    logger.warning("audit_log_write_failed", finding_id=d.finding_id)
 
         decision = FinalSecurityDecision(
             scan_id=scan_id,
@@ -223,23 +285,93 @@ class ConflictResolutionAgent(BaseAgent):
             audit_trail=audit,
             executed_at=now,
             executed_by="auto",
-            human_intervention_required=human_intervention_required,
-            pending_human_items=pending_ids,
+            human_intervention_required=state.get("human_intervention_required", False),
+            pending_human_items=state.get("pending_human_items", []),
             appeal_count=sum(1 for d in decisions if d.appealable),
         )
 
-        logger.info(
-            "conflict_resolution_complete",
-            scan_id=scan_id,
-            total=len(decisions),
-            blocking=decision.blocking_count,
-            waived=decision.waived_count,
-            deferred=decision.deferred_count,
-            needs_human=human_intervention_required,
-            overall_blocking=overall_blocking,
-        )
+        state["final_decision"] = decision.model_dump()
+        return state
 
-        return decision.model_dump()
+    # ------------------------------------------------------------------
+    # Core logic — uses StateGraph.ainvoke
+    # ------------------------------------------------------------------
+
+    async def run(self, **kwargs: Any) -> dict[str, Any]:
+        """Execute conflict resolution via LangGraph StateGraph.
+
+        If unresolved items remain after auto_resolve, the graph pauses
+        at human_review. Call resume_with_human_input() to continue.
+        """
+        security_report = kwargs.get("security_report", {})
+        code_metadata = kwargs.get("code_metadata", {})
+        config_dict = kwargs.get("config", {})
+        task_id = kwargs.get("task_id", generate_id())
+        scan_id = kwargs.get("scan_id", generate_id())
+
+        # Load exemption rules
+        rules = []
+        if self._rule_store:
+            try:
+                rules = self._rule_store.get_active_rules()
+            except Exception:
+                logger.warning("rule_store_load_failed", scan_id=scan_id)
+
+        # Check for framework upgrade
+        target_version = code_metadata.get("target_version") or {}
+        is_framework_upgrade = bool(target_version.get("framework"))
+
+        initial_state: ConflictState = {
+            "security_report": security_report,
+            "exemption_rules": rules,
+            "is_framework_upgrade": is_framework_upgrade,
+            "target_version": target_version if target_version else None,
+            "config": config_dict,
+            "scan_id": scan_id,
+            "task_id": task_id,
+            "auto_resolved": [],
+            "unresolved": [],
+            "human_input": None,
+            "human_intervention_required": False,
+            "pending_human_items": [],
+            "final_decision": None,
+            "error": "",
+        }
+
+        # Run the graph (pauses at human_review if needed)
+        thread_id = f"conflict:{task_id}:{scan_id}"
+        config = {"configurable": {"thread_id": thread_id}}
+
+        result = await self._graph.ainvoke(initial_state, config)
+        return result.get("final_decision") or {}
+
+    async def resume_with_human_input(
+        self,
+        task_id: str,
+        scan_id: str,
+        human_decisions: dict[str, str],
+    ) -> dict[str, Any]:
+        """Resume the paused graph with human decisions.
+
+        Args:
+            task_id: Same task_id used in run().
+            scan_id: Same scan_id used in run().
+            human_decisions: Map of finding_id -> block|waive|defer.
+
+        Returns:
+            FinalSecurityDecision dict with human decisions applied.
+        """
+        thread_id = f"conflict:{task_id}:{scan_id}"
+        config = {"configurable": {"thread_id": thread_id}}
+
+        update: dict[str, Any] = {"human_input": human_decisions}
+
+        try:
+            result = await self._graph.ainvoke(update, config)
+            return result.get("final_decision") or {}
+        except Exception as e:
+            logger.error("conflict_resume_failed", error=str(e)[:200])
+            raise
 
     # ------------------------------------------------------------------
     # Degradation
@@ -248,11 +380,7 @@ class ConflictResolutionAgent(BaseAgent):
     async def degraded_run(
         self, original_error: Exception, **kwargs: Any
     ) -> dict[str, Any]:
-        """Fallback: block all findings (safety-first degradation).
-
-        When the resolver fails entirely, we default to blocking
-        everything. This preserves security posture.
-        """
+        """Fallback: block all findings (safety-first)."""
         security_report = kwargs.get("security_report", {})
         scan_id = kwargs.get("scan_id", generate_id())
         now = datetime.now(timezone.utc).isoformat()
@@ -262,22 +390,20 @@ class ConflictResolutionAgent(BaseAgent):
 
         decisions = []
         for v in vulns:
-            cid = v.get("cve_id", "")
             decisions.append(SecurityVerdict(
-                finding_id=cid,
+                finding_id=v.get("cve_id", ""),
                 finding_type="vulnerability",
                 verdict="block",
-                reason=f"Resolver degraded — defaulting to block: {str(original_error)}",
+                reason=f"Resolver degraded — defaulting to block",
                 operator="system:degraded",
                 appealable=True,
             ))
-        for issue in issues:
-            rid = issue.get("rule_id", "")
+        for iss in issues:
             decisions.append(SecurityVerdict(
-                finding_id=rid,
+                finding_id=iss.get("rule_id", ""),
                 finding_type="code_issue",
                 verdict="block",
-                reason=f"Resolver degraded — defaulting to block: {str(original_error)}",
+                reason=f"Resolver degraded — defaulting to block",
                 operator="system:degraded",
                 appealable=True,
             ))
@@ -290,5 +416,4 @@ class ConflictResolutionAgent(BaseAgent):
             executed_at=now,
             executed_by="system:degraded",
         )
-
         return decision.model_dump()

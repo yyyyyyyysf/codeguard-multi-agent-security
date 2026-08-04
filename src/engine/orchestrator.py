@@ -30,6 +30,9 @@ from src.core.constants import (
 from src.core.models import ScanScope, ScanStatus
 from src.engine.base_agent import BaseAgent
 from src.engine.event_bus import EventBus
+from src.utils.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 class Orchestrator:
@@ -229,15 +232,16 @@ class Orchestrator:
             try:
                 key = TASK_STATUS_KEY.format(task_id=task_id)
                 await self._redis.setex(key, TASK_RESULT_TTL, status)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("redis_status_sync_failed", task_id=task_id, error=str(e)[:100])
 
     async def _update_progress(self, task_id: str, stage: str) -> None:
         if self._redis:
             try:
                 key = TASK_PROGRESS_KEY.format(task_id=task_id)
                 await self._redis.setex(key, TASK_RESULT_TTL, stage)
-            except Exception:
+            except Exception as e:
+                logger.warning("orchestrator_redis_error", error=str(e)[:100])
                 pass
 
     async def _cache_result(self, task_id: str, data: dict[str, Any]) -> None:
@@ -248,5 +252,6 @@ class Orchestrator:
                 await self._redis.setex(
                     key, TASK_RESULT_TTL, json.dumps(data, default=str)
                 )
-            except Exception:
+            except Exception as e:
+                logger.warning("orchestrator_redis_error", error=str(e)[:100])
                 pass

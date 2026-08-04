@@ -231,14 +231,37 @@ class CodeScanner:
     # Helpers
     # ------------------------------------------------------------------
 
-    @staticmethod
+    # Language -> file extension mapping (extensible via config)
+    LANGUAGE_EXTENSIONS: dict[str, list[str]] = {
+        "python": [".py"],
+        "javascript": [".js", ".jsx", ".mjs"],
+        "typescript": [".ts", ".tsx"],
+        "java": [".java"],
+        "go": [".go"],
+        "rust": [".rs"],
+        "ruby": [".rb"],
+        "php": [".php"],
+        "c": [".c", ".h"],
+        "cpp": [".cpp", ".hpp", ".cc", ".cxx"],
+    }
+
+    @classmethod
     def _should_scan(
-        file_path: str, language: str, blacklist: list[str]
+        cls, file_path: str, language: str, blacklist: list[str]
     ) -> bool:
-        """Determine if a file should be scanned by Semgrep."""
-        # Language filter (MVP: Python only)
-        if language == "python" and not file_path.endswith(".py"):
-            return False
+        """Determine if a file should be scanned by Semgrep.
+
+        Language filtering is driven by LANGUAGE_EXTENSIONS config,
+        not hardcoded per-language checks. Add new languages by
+        extending the dict — no code changes needed.
+        """
+        # Language -> extension lookup
+        valid_extensions = cls.LANGUAGE_EXTENSIONS.get(language, [])
+        if valid_extensions:
+            import os
+            ext = os.path.splitext(file_path)[1].lower()
+            if ext not in valid_extensions:
+                return False
 
         # Blacklist filter
         for pattern in blacklist:

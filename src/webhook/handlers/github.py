@@ -151,15 +151,28 @@ async def _trigger_scan(
     # Generate task_id
     task_id = generate_task_id()
 
-    # TODO: Dispatch to Celery (Module 13)
-    # For now, log and store in Redis
-    logger.info(
-        "webhook_scan_triggered",
-        repo=repo_full_name,
-        pr=pr_number if is_pr else None,
-        head_sha=head_sha[:8],
-        task_id=task_id,
-    )
+    # Dispatch to Celery for async execution
+    try:
+        from src.tasks.analysis import analysis_main_task
+        analysis_main_task.apply_async(
+            kwargs={
+                "task_id": task_id,
+                "repo_url": repo_url,
+                "branch": base_branch,
+                "scan_type": "diff" if is_pr else "full",
+                "pr_info": {"pr_number": pr_number, "base_branch": base_branch, "head_branch": head_branch} if is_pr else None,
+            },
+            queue="codeguard",
+        )
+        logger.info(
+            "webhook_scan_dispatched",
+            repo=repo_full_name,
+            pr=pr_number if is_pr else None,
+            head_sha=head_sha[:8],
+            task_id=task_id,
+        )
+    except Exception as e:
+        logger.error("webhook_celery_dispatch_failed", repo=repo_full_name, error=str(e)[:200])
 
     # Cache idempotency key
     if request:

@@ -24,6 +24,9 @@ from src.core.constants import (
 )
 from src.core.models import Ecosystem, Severity
 from src.storage.osv_client import OSVClient
+from src.utils.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 class CVECache:
@@ -96,7 +99,8 @@ class CVECache:
             key = f"{name}@{ver}"
             try:
                 results[key] = await self.lookup(name, ver, eco)
-            except Exception:
+            except Exception as e:
+                logger.warning("cve_lookup_batch_failed", package=key, error=str(e)[:100])
                 results[key] = []  # Degraded: empty for this package
         return results
 
@@ -134,7 +138,8 @@ class CVECache:
             data = await self._redis.get(key)
             if data:
                 return json.loads(data)
-        except Exception:
+        except Exception as e:
+            logger.warning("cve_cache_redis_get_failed", key=key[:50], error=str(e)[:100])
             pass
         return None
 
@@ -143,7 +148,8 @@ class CVECache:
     ) -> None:
         try:
             await self._redis.setex(key, ttl, json.dumps(data))
-        except Exception:
+        except Exception as e:
+            logger.warning("cve_cache_redis_get_failed", key=key[:50], error=str(e)[:100])
             pass  # Redis failure is non-fatal
 
     # ------------------------------------------------------------------
@@ -279,7 +285,8 @@ class CVECache:
         try:
             async with OSVClient() as client:
                 raw_vulns = await client.query_vulns(package_name, version, ecosystem)
-        except Exception:
+        except Exception as e:
+            logger.warning("osv_fetch_failed", package=package_name, version=version, error=str(e)[:100])
             return None  # Degradation: OSV unavailable
 
         normalized = []
