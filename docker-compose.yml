@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   api:
     build: .
@@ -13,9 +11,8 @@ services:
       - .:/app
       - codeguard_repos:/tmp/codeguard_repos
       - codeguard_reports:/tmp/codeguard_reports
-    depends_on:
-      redis:
-        condition: service_healthy
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     restart: unless-stopped
 
   worker:
@@ -28,26 +25,10 @@ services:
       - .:/app
       - codeguard_repos:/tmp/codeguard_repos
       - codeguard_reports:/tmp/codeguard_reports
-    depends_on:
-      redis:
-        condition: service_healthy
-    restart: unless-stopped
-
-  redis:
-    image: redis:7-alpine
-    container_name: codeguard-redis
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 3s
-      retries: 5
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     restart: unless-stopped
 
 volumes:
-  redis_data:
   codeguard_repos:
   codeguard_reports:
