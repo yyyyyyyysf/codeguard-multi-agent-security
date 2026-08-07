@@ -54,13 +54,9 @@ def analysis_main_task(
     """Entry point for a full analysis pipeline.
 
     Flow: preprocess -> (security_chain || migration) -> report -> callback
-
-    This is a sync Celery task that uses Celery primitives (chain, group)
-    to orchestrate sub-tasks. Each sub-task is also a Celery task.
     """
     task_id = task_id or generate_task_id()
 
-    # Idempotency: skip if already done
     if _sync_check_idempotent(task_id):
         return {"task_id": task_id, "status": "already_completed", "cached": True}
 
@@ -68,28 +64,31 @@ def analysis_main_task(
 
     scan_scope = ScanScope.FULL if scan_type == "full" else ScanScope.DIFF
 
-    # Build the Celery workflow
-    workflow = chain(
-        preprocess_task.s(
-            task_id=task_id,
-            repo_url=repo_url,
-            branch=branch,
-            scan_scope=scan_scope.value,
-            pr_info=pr_info,
-        ),
-        _dispatch_parallel.s(
-            task_id=task_id,
-            target=target,
-        ),
-        report_aggregation_task.s(task_id=task_id),
-        webhook_callback_task.s(
-            task_id=task_id,
-            callback_url=callback_url,
-        ),
-    )
+    try:
+        workflow = chain(
+            preprocess_task.s(
+                task_id=task_id,
+                repo_url=repo_url,
+                branch=branch,
+                scan_scope=scan_scope.value,
+                pr_info=pr_info,
+            ),
+            _dispatch_parallel.s(
+                task_id=task_id,
+                target=target,
+            ),
+            report_aggregation_task.s(task_id=task_id),
+            webhook_callback_task.s(
+                task_id=task_id,
+                callback_url=callback_url,
+            ),
+        )
 
-    result = workflow.apply_async()
-    return {"task_id": task_id, "status": "running", "celery_group_id": result.id}
+        result = workflow.apply_async()
+        return {"task_id": task_id, "status": "running", "celery_group_id": result.id}
+    except Exception:
+        _cleanup_task_dir(task_id)
+        raise
 
 
 # ==================================================================
@@ -121,12 +120,22 @@ def preprocess_task(
         from src.preprocess.metadata import run_preprocessing
 
         work_dir = f"/tmp/codeguard_repos/{task_id}"
+
+        # Extract diff parameters from pr_info
+        base_sha = None
+        head_sha = None
+        if pr_info:
+            base_sha = pr_info.get("base_sha")
+            head_sha = pr_info.get("head_sha")
+
         metadata = run_preprocessing(
             repo_url=repo_url,
             work_dir=work_dir,
             task_id=task_id,
             scan_id=task_id,
             scan_scope=ScanScope(scan_scope),
+            base_sha=base_sha,
+            head_sha=head_sha,
             branch=branch,
         )
 
@@ -322,10 +331,14 @@ def report_aggregation_task(
         _sync_cache_json(f"codeguard:task:{task_id}:result", report, ttl=86400)
         _sync_set_status(task_id, "completed")
 
+        # Cleanup working directory
+        _cleanup_task_dir(task_id)
+
         return {"task_id": task_id, "status": "completed"}
 
     except Exception as exc:
         logger.error("report_failed", task_id=task_id, error=str(exc)[:200])
+        _cleanup_task_dir(task_id)
         return {"task_id": task_id, "status": "report_failed", "error": str(exc)[:200]}
 
 
@@ -462,3 +475,17 @@ def _sync_run_async(coro):
         return loop.run_until_complete(coro)
     except RuntimeError:
         return asyncio.run(coro)
+
+
+def _cleanup_task_dir(task_id: str) -> None:
+    """Remove the cloned repo working directory for this task."""
+    import shutil
+    from pathlib import Path
+
+    work_dir = Path(f"/tmp/codeguard_repos/{task_id}")
+    try:
+        if work_dir.exists():
+            shutil.rmtree(str(work_dir), ignore_errors=True)
+            logger.info("task_dir_cleaned", task_id=task_id, path=str(work_dir))
+    except Exception:
+        logger.warning("task_dir_cleanup_failed", task_id=task_id, path=str(work_dir))

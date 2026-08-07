@@ -5,7 +5,7 @@
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.110+-green.svg)](https://fastapi.tiangolo.com/)
 [![LangGraph](https://img.shields.io/badge/LangGraph-0.2+-orange.svg)](https://langchain-ai.github.io/langgraph/)
-[![Tests](https://img.shields.io/badge/tests-248%20passed-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/tests-239%20passed-brightgreen.svg)]()
 
 CodeGuard embeds automated security analysis into your CI/CD pipeline — blocking vulnerabilities at the PR level before they reach production.
 
@@ -33,11 +33,13 @@ GitHub Webhook -> FastAPI -> Celery -> Preprocess -> 4 AI Agents -> GitHub Check
 git clone https://github.com/your/codeguard
 cd codeguard
 cp .env.example .env
+# REQUIRED: edit .env and set CODEGUARD_API_KEY, GITHUB_WEBHOOK_SECRET
+# The API and webhook endpoints will reject requests until these are configured.
 
 # Run with Docker
 docker-compose up -d
 
-# Or CLI mode (no server needed)
+# Or CLI mode (no server needed, no API key required)
 python -m src.cli.main analyze ./my-project
 python -m src.cli.main analyze ./my-project --target fastapi:0.100.0:0.110.0
 ```
@@ -68,10 +70,10 @@ python -m src.cli.main analyze ./my-project --target fastapi:0.100.0:0.110.0
 
 ```
 Modules:     14 completed
-Tests:       248 passed
+Tests:       239 passed
 Agent coverage: 87% avg
 Lines:       ~6,000 Python
-Commits:     13
+Commits:     20
 ```
 
 ## Tech Stack

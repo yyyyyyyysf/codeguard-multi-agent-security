@@ -6,8 +6,9 @@ Invalid input is rejected before any business logic runs.
 
 from __future__ import annotations
 
+import os
+
 from pydantic import BaseModel, Field, field_validator
-import re
 
 
 class TargetVersion(BaseModel):
@@ -22,6 +23,8 @@ class PRInfo(BaseModel):
     pr_number: int = Field(..., ge=1, description="PR number")
     base_branch: str = Field(default="main", description="Target branch")
     head_branch: str = Field(default="", description="Source branch")
+    base_sha: str | None = Field(default=None, description="Base commit SHA (for diff scan)")
+    head_sha: str | None = Field(default=None, description="Head commit SHA (for diff scan)")
 
 
 class ScanConfig(BaseModel):
@@ -50,8 +53,8 @@ class AnalyzeRequest(BaseModel):
     @field_validator("repo_url")
     @classmethod
     def validate_repo_url(cls, v: str) -> str:
-        if not (v.startswith("https://") or v.startswith("git@") or v.startswith("ssh://")):
-            raise ValueError("repo_url must start with https://, git@, or ssh://")
+        from src.utils.repo_url import assert_repo_url_safe
+        assert_repo_url_safe(v)
         return v
 
     @field_validator("scan_type")

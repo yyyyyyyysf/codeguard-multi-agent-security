@@ -45,14 +45,20 @@ async def github_webhook(
 
     # Step 1: Verify signature
     secret = os.getenv("GITHUB_WEBHOOK_SECRET", "")
-    if secret:
-        if not x_hub_signature_256:
-            logger.warning("webhook_missing_signature", ip=request.client.host if request.client else "unknown")
-            raise HTTPException(status_code=401, detail="Missing X-Hub-Signature-256 header")
+    if not secret:
+        logger.error("webhook_secret_not_configured")
+        raise HTTPException(
+            status_code=503,
+            detail="Webhook secret not configured. Set GITHUB_WEBHOOK_SECRET.",
+        )
 
-        if not verify_signature(body_bytes, secret, x_hub_signature_256):
-            logger.warning("webhook_invalid_signature", ip=request.client.host if request.client else "unknown")
-            raise HTTPException(status_code=401, detail="Invalid signature")
+    if not x_hub_signature_256:
+        logger.warning("webhook_missing_signature", ip=request.client.host if request.client else "unknown")
+        raise HTTPException(status_code=401, detail="Missing X-Hub-Signature-256 header")
+
+    if not verify_signature(body_bytes, secret, x_hub_signature_256):
+        logger.warning("webhook_invalid_signature", ip=request.client.host if request.client else "unknown")
+        raise HTTPException(status_code=401, detail="Invalid signature")
 
     # Step 2: Return 200 immediately
     logger.info("webhook_received", event_type=x_github_event or "unknown")

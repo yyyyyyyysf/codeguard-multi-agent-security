@@ -3,30 +3,56 @@
 import hashlib
 import hmac
 import json
+import sys
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 from fastapi.testclient import TestClient
+
+_TEST_SECRET = "test-secret"
 
 
 @pytest.fixture
 def client():
-    from src.api.app import create_app
-    app = create_app()
-    # Mount webhook router
-    from src.webhook.receiver import router as webhook_router
-    app.include_router(webhook_router)
-    app.state.redis = None
-    with TestClient(app) as c:
-        yield c
+    """Test client with Celery and Redis fully mocked.
+
+    The webhook handler imports ``src.tasks.analysis`` which constructs
+    a Celery app that tries to connect to Redis. Mocking Celery + Redis
+    keeps the tests fast and self-contained.
+    """
+    mock_task = MagicMock()
+    mock_result = MagicMock(id="celery-mock-id")
+    mock_task.apply_async.return_value = mock_result
+
+    mock_redis = MagicMock()
+    mock_redis.get.return_value = None
+    mock_redis.setex.return_value = None
+
+    with patch.dict("os.environ", {"GITHUB_WEBHOOK_SECRET": _TEST_SECRET}):
+        with patch.dict(sys.modules, {
+            "src.tasks.analysis": MagicMock(analysis_main_task=mock_task),
+        }):
+            from src.api.app import create_app
+            app = create_app()
+            app.state.redis = mock_redis
+            from src.webhook.receiver import router as webhook_router
+            app.include_router(webhook_router)
+            with TestClient(app) as c:
+                yield c
+
+
+def _sign(body: bytes) -> str:
+    return f"sha256={hmac.new(_TEST_SECRET.encode(), body, hashlib.sha256).hexdigest()}"
 
 
 class TestWebhookSignature:
     def test_ping_returns_pong(self, client):
+        body = b'{"zen":"test"}'
         resp = client.post(
             "/webhook/github",
-            content=b'{"zen":"test"}',
+            content=body,
             headers={
                 "X-GitHub-Event": "ping",
+                "X-Hub-Signature-256": _sign(body),
             },
         )
         assert resp.status_code == 200
@@ -46,10 +72,14 @@ class TestWebhookSignature:
                 "clone_url": "https://github.com/owner/repo.git",
             },
         })
+        body_bytes = body.encode()
         resp = client.post(
             "/webhook/github",
-            content=body,
-            headers={"X-GitHub-Event": "pull_request"},
+            content=body_bytes,
+            headers={
+                "X-GitHub-Event": "pull_request",
+                "X-Hub-Signature-256": _sign(body_bytes),
+            },
         )
         assert resp.status_code == 200
         assert resp.json()["message"] == "accepted"
@@ -65,10 +95,14 @@ class TestWebhookSignature:
                 "default_branch": "main",
             },
         })
+        body_bytes = body.encode()
         resp = client.post(
             "/webhook/github",
-            content=body,
-            headers={"X-GitHub-Event": "push"},
+            content=body_bytes,
+            headers={
+                "X-GitHub-Event": "push",
+                "X-Hub-Signature-256": _sign(body_bytes),
+            },
         )
         assert resp.status_code == 200
 
@@ -83,16 +117,36 @@ class TestWebhookSignature:
                 "default_branch": "main",
             },
         })
+        body_bytes = body.encode()
         resp = client.post(
             "/webhook/github",
-            content=body,
-            headers={"X-GitHub-Event": "push"},
+            content=body_bytes,
+            headers={
+                "X-GitHub-Event": "push",
+                "X-Hub-Signature-256": _sign(body_bytes),
+            },
         )
         assert resp.status_code == 200
 
 
 class TestWebhookSignatureVerification:
     """Tests for HMAC signature verification."""
+
+    def test_missing_secret_rejected(self, client):
+        """Without a configured secret, the endpoint returns 500."""
+        with patch.dict("os.environ", {}, clear=True):
+            from src.api.app import create_app
+            app2 = create_app()
+            from src.webhook.receiver import router as wr
+            app2.include_router(wr)
+            app2.state.redis = MagicMock()
+            with TestClient(app2) as c2:
+                resp = c2.post(
+                    "/webhook/github",
+                    content=b'{"test": true}',
+                    headers={"X-GitHub-Event": "ping"},
+                )
+                assert resp.status_code == 503
 
     @patch.dict("os.environ", {"GITHUB_WEBHOOK_SECRET": "test-secret"})
     def test_missing_signature_rejected(self, client):

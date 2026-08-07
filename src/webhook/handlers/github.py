@@ -137,6 +137,10 @@ async def _trigger_scan(
     if not repo_url or not head_sha:
         return {}
 
+    if not _repo_url_is_safe(repo_url):
+        logger.error("webhook_ssrf_blocked", repo_url=repo_url)
+        return {}
+
     # Idempotency check via Redis
     task_id = None
     if request:
@@ -160,7 +164,13 @@ async def _trigger_scan(
                 "repo_url": repo_url,
                 "branch": base_branch,
                 "scan_type": "diff" if is_pr else "full",
-                "pr_info": {"pr_number": pr_number, "base_branch": base_branch, "head_branch": head_branch} if is_pr else None,
+                "pr_info": {
+                    "pr_number": pr_number,
+                    "base_branch": base_branch,
+                    "head_branch": head_branch,
+                    "base_sha": base_sha,
+                    "head_sha": head_sha,
+                } if is_pr else None,
             },
             queue="codeguard",
         )
@@ -197,3 +207,9 @@ def _idempotency_key(repo: str, pr_number: int, head_sha: str) -> str:
     """Generate a deterministic idempotency key."""
     raw = f"{repo}:{pr_number}:{head_sha}"
     return hashlib.sha256(raw.encode()).hexdigest()[:16]
+
+
+def _repo_url_is_safe(url: str) -> bool:
+    """Delegate to shared SSRF validator (src.utils.repo_url)."""
+    from src.utils.repo_url import repo_url_is_safe
+    return repo_url_is_safe(url)

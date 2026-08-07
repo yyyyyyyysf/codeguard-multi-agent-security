@@ -13,7 +13,9 @@ from src.api.deps import get_task_state, verify_api_key
 from src.api.schemas.request import AnalyzeRequest
 from src.api.schemas.response import AnalyzeResponse, TaskStatusResponse
 from src.utils.id_gen import generate_task_id
+from src.utils.logging import get_logger
 
+logger = get_logger(__name__)
 router = APIRouter()
 
 
@@ -30,16 +32,65 @@ async def submit_analysis(
     """
     task_id = generate_task_id()
 
-    # TODO: Dispatch to Celery when task layer is ready (Module 13)
-    # For now, store initial state in Redis
-    redis = getattr(request.app.state, "redis", None)
-    if redis:
-        import json
-        await redis.setex(
-            f"codeguard:task:{task_id}:status",
-            3600,
-            "pending",
+    # Build Celery kwargs matching analysis_main_task signature
+    celery_kwargs: dict = {
+        "task_id": task_id,
+        "repo_url": body.repo_url,
+        "branch": body.branch,
+        "scan_type": body.scan_type,
+        "callback_url": body.callback_url or "",
+    }
+
+    # Migration target
+    if body.target:
+        celery_kwargs["target"] = {
+            "framework": body.target.framework,
+            "from_version": body.target.from_version,
+            "to_version": body.target.to_version,
+        }
+
+    # PR info
+    if body.pr_info:
+        celery_kwargs["pr_info"] = {
+            "pr_number": body.pr_info.pr_number,
+            "base_branch": body.pr_info.base_branch,
+            "head_branch": body.pr_info.head_branch,
+            "base_sha": body.pr_info.base_sha,
+            "head_sha": body.pr_info.head_sha,
+        }
+
+    try:
+        from src.tasks.analysis import analysis_main_task
+        result = analysis_main_task.apply_async(
+            kwargs=celery_kwargs,
+            queue="codeguard",
         )
+        logger.info("api_analysis_dispatched", task_id=task_id, celery_id=result.id)
+    except ImportError as exc:
+        logger.warning("celery_not_available", error=str(exc))
+        # Fall back to Redis-only tracking — task won't execute until
+        # a Celery worker is connected, but the API stays responsive.
+        redis = getattr(request.app.state, "redis", None)
+        if redis:
+            import json
+            await redis.setex(
+                f"codeguard:task:{task_id}:status", 3600, "pending"
+            )
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "error": {
+                    "code": "QUEUE-001",
+                    "message": "Task queue unavailable. Try again later."
+                }
+            },
+        ) from exc
+    except Exception as exc:
+        logger.error("api_celery_dispatch_failed", task_id=task_id, error=str(exc)[:200])
+        raise HTTPException(
+            status_code=503,
+            detail={"error": {"code": "QUEUE-001", "message": "Task queue unavailable"}},
+        ) from exc
 
     return {"task_id": task_id, "status": "pending"}
 

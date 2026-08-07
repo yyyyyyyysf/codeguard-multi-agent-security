@@ -13,7 +13,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY pyproject.toml .
 RUN pip install --no-cache-dir pip -U
 
-# Install only runtime deps (skip dev/test/semgrep for lighter image)
+# Install only runtime deps (skip dev/test for lighter image)
 RUN pip install --no-cache-dir \
     fastapi>=0.110.0 \
     "uvicorn[standard]>=0.27.0" \
@@ -26,6 +26,8 @@ RUN pip install --no-cache-dir \
     httpx>=0.27.0 \
     gitpython>=3.1.40 \
     tree-sitter>=0.21.0 \
+    tree-sitter-python>=0.21.0 \
+    semgrep>=1.60.0 \
     jinja2>=3.1.0 \
     structlog>=24.0.0 \
     pyyaml>=6.0.0 \

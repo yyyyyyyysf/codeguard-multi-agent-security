@@ -9,6 +9,7 @@ Provides reusable dependencies for:
 
 from __future__ import annotations
 
+import hmac
 import os
 
 from fastapi import Header, HTTPException, Request
@@ -31,9 +32,12 @@ async def verify_api_key(
     """
     configured_key = os.getenv("CODEGUARD_API_KEY", "")
 
-    # If no key is configured, allow all requests (dev mode)
+    # No key configured => reject all requests (explicit secure-by-default)
     if not configured_key:
-        return "anonymous"
+        raise HTTPException(
+            status_code=401,
+            detail={"error": {"code": "SEC-003", "message": "API key not configured. Set CODEGUARD_API_KEY."}},
+        )
 
     if not x_api_key:
         raise HTTPException(
@@ -41,7 +45,7 @@ async def verify_api_key(
             detail={"error": {"code": "SEC-003", "message": "Missing X-API-Key header"}},
         )
 
-    if x_api_key != configured_key:
+    if not hmac.compare_digest(x_api_key, configured_key):
         raise HTTPException(
             status_code=401,
             detail={"error": {"code": "SEC-003", "message": "Invalid API key"}},

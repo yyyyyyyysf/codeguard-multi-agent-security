@@ -22,7 +22,7 @@
 
 ## 二、已经完成了什么
 
-### 整体进度：14 个模块全部开发完成，238 个测试通过
+### 整体进度：14 个模块全部开发完成，239 个测试通过
 
 | 阶段 | 模块 | 状态 | 说明 |
 |------|------|:----:|------|
@@ -37,7 +37,7 @@
 | Phase 5.5 | Celery 任务层 | ✅ | 14 tests, 6 类核心任务, 全链路编排 |
 | Phase 6 | CLI + 集成测试 + README | ✅ | Typer CLI, 4 integration tests, 项目首页 |
 
-### 测试总计：238 tests collected，Agent 层平均覆盖率 87%
+### 测试总计：239 tests collected，Agent 层平均覆盖率 87%
 
 ```
 Security Agent:  40 tests, 89%
@@ -49,7 +49,7 @@ API + Webhook:   40 tests
 Tasks:           14 tests
 Integration:      4 tests
 ─────────────────────────
-Total:          238 tests
+Total:          239 tests
 ```
 
 ### Git 历史：18 commits，线性历史，规范化提交
@@ -58,28 +58,7 @@ Total:          238 tests
 
 ## 三、当前进展到哪，还存在什么问题
 
-### 当前状态：核心代码全部完成，需要修 3 个问题
-
-**问题 1（🔴 高）：docker-compose.yml 没有 Redis 服务**
-
-- 原因：用户本机已有 Valkey/Redis 在 6379 端口，上次为了复用把 compose 里的 redis 服务删了
-- 影响：`docker compose up` 后 Worker 找不到 Redis Broker，无法启动
-- .env.example 写 `redis://redis:6379` 但 compose 里没这个服务
-- .env 写 `redis://host.docker.internal:6379`——仅 Docker Desktop 可用，不通用
-- **修复**：把 Redis 服务加回 docker-compose.yml，.env 改回 `redis://redis:6379`
-
-**问题 2（🟡 中）：REST API `/api/v1/analyze` 没有走 Celery**
-
-- 文件：`src/api/routers/analyze.py`
-- 现状：`# TODO: Dispatch to Celery when task layer is ready (Module 13)`——只写了 Redis pending 状态，任务不会被实际执行
-- 对比：Webhook 路径 `src/webhook/handlers/github.py:157` 已经正确调了 `analysis_main_task.apply_async()`
-- **修复**：在 analyze.py 的 `submit_analysis()` 里加上 `analysis_main_task.apply_async()`
-
-**问题 3（🟢 低）：monitoring/metrics.py 是死代码**
-
-- `src/monitoring/metrics.py` 定义了 `MetricsCollector` + `get_metrics()` + 11 个指标常量
-- 全项目零 import / 零调用
-- **修复**：在 orchestrator.py 或 analysis.py 关键路径加 `get_metrics().inc("scan_request_total")`
+### 当前状态：核心代码全部完成，
 
 ### 上次修复（commit a40ba54）：7 项代码质量修复
 
@@ -135,7 +114,7 @@ uvicorn src.api.app:create_app --host 0.0.0.0 --port 8000 --factory
 # 浏览器打开 http://localhost:8000/docs 调试 API
 ```
 
-### Docker Compose 模式（修好 Redis 问题后）
+### Docker Compose 模式
 ```bash
 docker compose up -d --build
 ```
@@ -168,4 +147,4 @@ python -m pytest tests/integration/ -v
 
 ---
 
-> **给接手的新会话**：先读 PROJECT_RULES.md（开发规范）和 ARCHITECTURE.md（架构总览），然后对照 audit-findings 里的 3 个待修复问题，修完项目就完整了。用户风格是「先设计后编码、重产品思维、拒绝浮夸、要求可验证的数据」——做任何改动前先出方案让他确认。
+> **给接手的新会话**：先读 PROJECT_RULES.md（开发规范）和 ARCHITECTURE.md（架构总览），。用户风格是「先设计后编码、重产品思维、拒绝浮夸、要求可验证的数据」——做任何改动前先出方案让他确认。

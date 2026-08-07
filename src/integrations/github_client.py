@@ -166,7 +166,7 @@ class GitHubClient:
         # Truncate if exceeds GitHub's comment size limit
         truncated = body[:65536] if len(body) > 65536 else body
         if len(body) > 65536:
-            truncated += "\n\n> 内容过长已截断 · [查看完整报告](#)"
+            truncated += "\n\n> Content truncated · [View full report](#)"
 
         return await self._call(
             "POST",
@@ -186,7 +186,7 @@ class GitHubClient:
         """
         truncated = body[:65536] if len(body) > 65536 else body
         if len(body) > 65536:
-            truncated += "\n\n> 内容过长已截断 · [查看完整报告](#)"
+            truncated += "\n\n> Content truncated · [View full report](#)"
 
         return await self._call(
             "PATCH",

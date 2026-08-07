@@ -63,7 +63,7 @@ def run_preprocessing(
         ASTParseFailedError: If AST parsing fails for critical files.
     """
     # Step 1: Clone or pull repository
-    repo = clone_or_pull(repo_url, work_dir, branch=branch)
+    repo = clone_or_pull(repo_url, work_dir, branch=branch, head_sha=head_sha)
 
     # Step 2: Get commit info
     commit_info = get_commit_info(repo)
@@ -92,6 +92,7 @@ def run_preprocessing(
         "task_id": task_id,
         "scan_id": scan_id,
         "repo_url": repo_url,
+        "repo_path": repo.working_dir,
         "commit_sha": commit_info.get("sha", ""),
         "base_commit_sha": base_sha,
         "head_commit_sha": head_sha,

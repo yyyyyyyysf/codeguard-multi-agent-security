@@ -1,24 +1,57 @@
 """Tests for API routers (analyze, appeal, rules, health)."""
 
+import sys
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import patch, MagicMock
 from fastapi.testclient import TestClient
 
 
 @pytest.fixture
 def client():
-    """Create a test client with mocked dependencies."""
-    from src.api.app import create_app
-    app = create_app()
-    # Mock Redis on app state
-    app.state.redis = None
-    with TestClient(app) as c:
-        yield c
+    """Create a test client with mocked dependencies (no Celery involved).
+
+    Requires CODEGUARD_API_KEY to be set (secure-by-default policy).
+    """
+    with patch.dict("os.environ", {"CODEGUARD_API_KEY": "test-api-key"}):
+        from src.api.app import create_app
+        app = create_app()
+        app.state.redis = None
+        with TestClient(app) as c:
+            c.headers["X-API-Key"] = "test-api-key"
+            yield c
+
+
+@pytest.fixture
+def client_with_celery_mock():
+    """Test client where the Celery task import inside the handler is mocked.
+
+    Without this, ``from src.tasks.analysis import analysis_main_task``
+    inside the handler triggers the Celery constructor in celery_app.py,
+    which tries to connect to Redis and blocks for minutes.
+    """
+    mock_task = MagicMock()
+    mock_result = MagicMock(id="celery-mock-id")
+    mock_task.apply_async.return_value = mock_result
+
+    # Set CODEGUARD_API_KEY so verify_api_key passes.
+    # The patch.dict must be active before create_app() runs the lifespan handler
+    # and before requests are dispatched.
+    with patch.dict("os.environ", {"CODEGUARD_API_KEY": "test-api-key"}):
+        with patch.dict(sys.modules, {"src.tasks.analysis": MagicMock(
+            analysis_main_task=mock_task,
+        )}):
+            from src.api.app import create_app
+            app = create_app()
+            app.state.redis = None
+            with TestClient(app) as c:
+                # Prepend X-API-Key header to every request
+                c.headers["X-API-Key"] = "test-api-key"
+                yield c
 
 
 class TestAnalyzeEndpoint:
-    def test_submit_valid_request(self, client):
-        resp = client.post(
+    def test_submit_valid_request(self, client_with_celery_mock):
+        resp = client_with_celery_mock.post(
             "/api/v1/analyze",
             json={"repo_url": "https://github.com/user/repo"},
         )
@@ -27,8 +60,8 @@ class TestAnalyzeEndpoint:
         assert "task_id" in data
         assert data["status"] == "pending"
 
-    def test_submit_full_request(self, client):
-        resp = client.post(
+    def test_submit_full_request(self, client_with_celery_mock):
+        resp = client_with_celery_mock.post(
             "/api/v1/analyze",
             json={
                 "repo_url": "https://github.com/user/repo",
@@ -50,9 +83,8 @@ class TestAnalyzeEndpoint:
         resp = client.post("/api/v1/analyze", json={})
         assert resp.status_code in (400, 422)
 
-    def test_get_task_not_found(self, client):
-        resp = client.get("/api/v1/tasks/nonexistent-id")
-        # Task not found — returns pending status or 404
+    def test_get_task_not_found(self, client_with_celery_mock):
+        resp = client_with_celery_mock.get("/api/v1/tasks/nonexistent-id")
         assert resp.status_code in (200, 404)
 
 
