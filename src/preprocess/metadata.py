@@ -41,6 +41,7 @@ def run_preprocessing(
     scan_scope: ScanScope = ScanScope.FULL,
     base_sha: str | None = None,
     head_sha: str | None = None,
+    head_branch: str | None = None,
     branch: str = DEFAULT_BRANCH,
 ) -> dict[str, Any]:
     """Run the full preprocessing pipeline.
@@ -63,7 +64,7 @@ def run_preprocessing(
         ASTParseFailedError: If AST parsing fails for critical files.
     """
     # Step 1: Clone or pull repository
-    repo = clone_or_pull(repo_url, work_dir, branch=branch, head_sha=head_sha)
+    repo = clone_or_pull(repo_url, work_dir, branch=branch, head_branch=head_branch)
 
     # Step 2: Get commit info
     commit_info = get_commit_info(repo)

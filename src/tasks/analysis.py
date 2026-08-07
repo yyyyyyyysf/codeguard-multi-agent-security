@@ -124,9 +124,11 @@ def preprocess_task(
         # Extract diff parameters from pr_info
         base_sha = None
         head_sha = None
+        head_branch = None
         if pr_info:
             base_sha = pr_info.get("base_sha")
             head_sha = pr_info.get("head_sha")
+            head_branch = pr_info.get("head_branch")
 
         metadata = run_preprocessing(
             repo_url=repo_url,
@@ -136,6 +138,7 @@ def preprocess_task(
             scan_scope=ScanScope(scan_scope),
             base_sha=base_sha,
             head_sha=head_sha,
+            head_branch=head_branch,
             branch=branch,
         )
 

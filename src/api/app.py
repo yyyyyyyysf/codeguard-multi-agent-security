@@ -14,6 +14,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from src.api.middleware.error_handler import register_exception_handlers
+from src.api.middleware.rate_limit import RateLimitMiddleware
 from src.api.middleware.request_log import RequestLogMiddleware
 from src.api.routers import analyze, appeal, health, rules
 from src.utils.logging import get_logger
@@ -79,6 +80,9 @@ def create_app() -> FastAPI:
 
     # Request logging middleware
     app.add_middleware(RequestLogMiddleware)
+
+    # Rate limiting (enabled via RATE_LIMIT_ENABLED=true)
+    app.add_middleware(RateLimitMiddleware)
 
     # Register exception handlers
     register_exception_handlers(app)

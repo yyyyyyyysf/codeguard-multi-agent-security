@@ -49,10 +49,12 @@ class SecurityAuditAgent(BaseAgent):
         redis_client: Any = None,
         cve_db_path: str | None = None,
         semgrep_config_dir: str | None = None,
+        block_on_degraded: bool = False,
     ) -> None:
         super().__init__()
         self._cve_scanner = CVEScanner(redis_client, cve_db_path)
         self._code_scanner = CodeScanner(semgrep_config_dir)
+        self._block_on_degraded = block_on_degraded
 
     # ------------------------------------------------------------------
     # Core logic
@@ -152,6 +154,15 @@ class SecurityAuditAgent(BaseAgent):
         if degraded:
             self._degraded = True
             self._degraded_reasons = degraded_reasons
+
+            # When configured to block on degraded scans, every finding
+            # that passed through a degraded scanner becomes blocking.
+            # This implements "scan incomplete → deny" for safety-first.
+            if self._block_on_degraded:
+                for v in report.vulnerabilities:
+                    v.blocking = True
+                for ci in report.code_issues:
+                    ci.blocking = True
 
         return report.model_dump()
 

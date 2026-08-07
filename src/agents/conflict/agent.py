@@ -15,6 +15,7 @@ Design invariants:
 
 from __future__ import annotations
 
+import os
 import time
 from datetime import datetime, timezone
 from typing import Any, Literal
@@ -40,10 +41,26 @@ from src.utils.logging import get_logger
 
 logger = get_logger(__name__)
 
+def _build_checkpointer() -> MemorySaver:
+    """Return a checkpointer for the conflict resolution graph.
 
-# ------------------------------------------------------------------
-# LangGraph State
-# ------------------------------------------------------------------
+    Currently uses MemorySaver. For production, use ``SqliteSaver`` from
+    the ``langgraph-checkpoint-sqlite`` package and set
+    ``CODEGUARD_CHECKPOINT_DB_PATH=data/checkpoint.db``.
+    """
+    db_path = os.getenv("CODEGUARD_CHECKPOINT_DB_PATH", "")
+    if db_path:
+        try:
+            from langgraph.checkpoint.sqlite import SqliteSaver
+            return SqliteSaver.from_conn_string(db_path)  # type: ignore[return-value]
+        except ImportError:
+            logger.warning(
+                "checkpointer_sqlite_not_installed",
+                hint="pip install langgraph-checkpoint-sqlite",
+            )
+        except Exception as exc:
+            logger.warning("checkpointer_sqlite_failed", path=db_path, error=str(exc)[:200])
+    return MemorySaver()
 
 class ConflictState(TypedDict, total=False):
     """State carried through the security DAG."""
@@ -133,7 +150,7 @@ class ConflictResolutionAgent(BaseAgent):
         graph.add_edge("finalize", END)
 
         return graph.compile(
-            checkpointer=MemorySaver(),
+            checkpointer=_build_checkpointer(),
             interrupt_before=["human_review"],  # ← Pause here for human input
         )
 

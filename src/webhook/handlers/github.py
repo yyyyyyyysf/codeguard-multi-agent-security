@@ -156,6 +156,7 @@ async def _trigger_scan(
     task_id = generate_task_id()
 
     # Dispatch to Celery for async execution
+    dispatched = False
     try:
         from src.tasks.analysis import analysis_main_task
         analysis_main_task.apply_async(
@@ -174,6 +175,7 @@ async def _trigger_scan(
             },
             queue="codeguard",
         )
+        dispatched = True
         logger.info(
             "webhook_scan_dispatched",
             repo=repo_full_name,
@@ -184,8 +186,9 @@ async def _trigger_scan(
     except Exception as e:
         logger.error("webhook_celery_dispatch_failed", repo=repo_full_name, error=str(e)[:200])
 
-    # Cache idempotency key
-    if request:
+    # Only write idempotency / status if the task was actually dispatched.
+    # Writing them on failure would block re-delivery for 72 hours.
+    if dispatched and request:
         redis = getattr(request.app.state, "redis", None)
         if redis:
             dedup_key = _idempotency_key(repo_full_name, pr_number, head_sha)

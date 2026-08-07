@@ -24,21 +24,25 @@ def clone_or_pull(
     *,
     branch: str = DEFAULT_BRANCH,
     depth: int = GIT_CLONE_DEPTH,
-    head_sha: str | None = None,
+    head_branch: str | None = None,
 ) -> Repo:
     """Clone repo if not present, otherwise pull latest.
 
     In DIFF mode the shallow clone only has the base branch commits.
-    When *head_sha* is provided (the PR head commit), fetch it from
-    origin to ensure ``repo.commit(head_sha)`` succeeds during diff
-    extraction.
+    When *head_branch* is provided (the PR source branch name),
+    ``git fetch origin <head_branch>`` pulls the missing commits so
+    ``repo.commit(head_sha)`` succeeds during diff extraction.
+
+    Note: GitHub prohibits fetching unadvertised bare SHA hashes
+    (``Server does not allow request for unadvertised object``),
+    so we must fetch by branch/tag name, not SHA.
 
     Args:
         repo_url: Remote repository URL.
         work_dir: Local working directory path.
         branch: Target branch to checkout (base branch for PRs).
         depth: Shallow clone depth (default 50).
-        head_sha: Optional head commit SHA to fetch (PR DIFF mode).
+        head_branch: Optional PR source branch name to fetch.
 
     Returns:
         GitPython Repo object.
@@ -56,8 +60,8 @@ def clone_or_pull(
                 origin.fetch()
                 repo.git.checkout(branch)
                 origin.pull(branch)
-            if head_sha:
-                _fetch_sha(repo, head_sha)
+            if head_branch:
+                _fetch_branch(repo, head_branch)
             return repo
         except GitError as e:
             raise RepoCloneFailedError(
@@ -73,8 +77,8 @@ def clone_or_pull(
             branch=branch,
             depth=depth,
         )
-        if head_sha:
-            _fetch_sha(repo, head_sha)
+        if head_branch:
+            _fetch_branch(repo, head_branch)
         return repo
     except GitCommandError as e:
         raise RepoCloneFailedError(
@@ -83,18 +87,18 @@ def clone_or_pull(
         ) from e
 
 
-def _fetch_sha(repo: Repo, sha: str) -> None:
-    """Fetch a specific commit SHA from origin.
+def _fetch_branch(repo: Repo, branch_name: str) -> None:
+    """Fetch a remote branch to pull in commits missing from shallow clone.
 
-    Shallow clones only include the default branch history, so PR
-    HEAD commits are missing. ``git fetch origin <sha>`` pulls just
-    the needed object.
+    GitHub prohibits ``git fetch origin <bare-sha>`` (unadvertised
+    object), so we fetch by branch name instead.  Non-fatal: diff
+    extraction will produce a clear error downstream if the branch
+    name is wrong.
     """
     try:
         origin = repo.remotes.origin
-        origin.fetch(sha)
+        origin.fetch(branch_name)
     except GitError:
-        # Non-fatal: diff will fail gracefully later with a clear message
         pass
 
 
