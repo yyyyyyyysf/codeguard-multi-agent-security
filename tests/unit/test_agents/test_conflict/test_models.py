@@ -1,12 +1,11 @@
 """Tests for Conflict Resolution Agent data models."""
 
-import pytest
 from src.agents.conflict.models import (
-    SecurityVerdict,
     AuditEntry,
     AuditTrail,
     FinalSecurityDecision,
     ResolutionConfig,
+    SecurityVerdict,
 )
 
 

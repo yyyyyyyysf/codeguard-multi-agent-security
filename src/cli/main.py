@@ -9,9 +9,7 @@ Usage:
 from __future__ import annotations
 
 import json
-import sys
 from pathlib import Path
-from typing import Optional
 
 import typer
 
@@ -25,11 +23,11 @@ app = typer.Typer(
 @app.command()
 def analyze(
     repo_path: str = typer.Argument(..., help="Path to the local repository"),
-    target: Optional[str] = typer.Option(
+    target: str | None = typer.Option(
         None, "--target", "-t",
         help="Migration target: framework:from_version:to_version (e.g., fastapi:0.100.0:0.110.0)",
     ),
-    output: Optional[str] = typer.Option(
+    output: str | None = typer.Option(
         None, "--output", "-o", help="Save report to file (JSON format)"
     ),
     json_output: bool = typer.Option(
@@ -83,12 +81,13 @@ def analyze(
     import asyncio
 
     async def run_analysis():
-        # Preprocess
+        from src.core.models import ScanScope
+        from src.engine.event_bus import EventBus
+        from src.engine.orchestrator import Orchestrator
         from src.preprocess.metadata import run_preprocessing
         from src.utils.id_gen import generate_task_id
 
         task_id = generate_task_id()
-        from src.core.models import ScanScope
         scan_scope_enum = ScanScope.FULL if scan_type == "full" else ScanScope.DIFF
         metadata = run_preprocessing(
             repo_url=f"file://{repo}",
@@ -100,69 +99,43 @@ def analyze(
         )
         dep_count = len(metadata.get("dependencies", []))
         file_count = len(metadata.get("changed_files", []))
-        typer.echo(f"       Found {dep_count} dependencies, {file_count} files ({metadata.get('language', 'unknown')})")
+        lang = metadata.get("language", "unknown")
+        typer.echo(
+            f"       Found {dep_count} dependencies, {file_count} files ({lang})"
+        )
 
-        # Phase 2: Security
-        typer.echo("  [2/4] Security audit...")
+        # Register agents with the in-process orchestrator
+        from src.agents.conflict.agent import ConflictResolutionAgent
+        from src.agents.migration.agent import MigrationAssessmentAgent
+        from src.agents.reporter.agent import ReportAggregationAgent
         from src.agents.security.agent import SecurityAuditAgent
 
-        security_agent = SecurityAuditAgent()
-        security_result = await security_agent.execute(
-            code_metadata=metadata,
-            scan_scope=scan_type,
-            scan_id=task_id,
-            scan_config={"block_severity": severity},
-        )
-        security_data = security_result.get("data", {})
-        vuln_count = len(security_data.get("vulnerabilities", []))
-        issue_count = len(security_data.get("code_issues", []))
-        blocking = sum(
-            1 for v in security_data.get("vulnerabilities", []) if v.get("blocking")
-        ) + sum(1 for i in security_data.get("code_issues", []) if i.get("blocking"))
+        orchestrator = Orchestrator(redis_client=None, event_bus=EventBus())
+        orchestrator.register_agent("security", SecurityAuditAgent())
+        orchestrator.register_agent("conflict", ConflictResolutionAgent())
+        orchestrator.register_agent("migration", MigrationAssessmentAgent())
+        orchestrator.register_agent("reporter", ReportAggregationAgent())
 
-        # Phase 2b: Conflict resolution
-        typer.echo("  [2/4] Resolving conflicts...")
-        from src.agents.conflict.agent import ConflictResolutionAgent
-
-        conflict_agent = ConflictResolutionAgent()
-        conflict_result = await conflict_agent.execute(
-            security_report=security_data,
-            code_metadata=metadata,
+        typer.echo("  [2/4] Security audit + conflict resolution...")
+        report_data = await orchestrator.run_analysis(
             task_id=task_id,
             scan_id=task_id,
-        )
-        conflict_data = conflict_result.get("data", {})
-        overall_blocking = conflict_data.get("overall_blocking", False)
-
-        # Phase 3: Migration (optional)
-        migration_data = {}
-        if target_version:
-            typer.echo("  [3/4] Migration assessment...")
-            from src.agents.migration.agent import MigrationAssessmentAgent
-
-            mig_agent = MigrationAssessmentAgent()
-            mig_result = await mig_agent.execute(
-                code_metadata=metadata,
-                target_version=target_version,
-                scan_id=task_id,
-            )
-            migration_data = mig_result.get("data", {})
-
-        # Phase 4: Report
-        typer.echo("  [4/4] Generating report...")
-        from src.agents.reporter.agent import ReportAggregationAgent
-
-        reporter = ReportAggregationAgent()
-        report_result = await reporter.execute(
-            security_data={"security": security_data, "conflict": conflict_data},
-            migration_data=migration_data,
             repo_url=str(repo),
             code_metadata=metadata,
-            scan_id=task_id,
-            task_id=task_id,
+            scan_scope=scan_scope_enum,
+            target_version=target_version,
+            scan_config={"block_severity": severity},
         )
 
-        return report_result.get("data", {}), overall_blocking, vuln_count, issue_count
+        report = report_data.get("aggregated", {})
+        overall_blocking = report_data.get("security", {}).get(
+            "overall_blocking", False
+        )
+        security_report = report.get("security", {}).get("security_report", {})
+        vuln_count = len(security_report.get("vulnerabilities", []))
+        issue_count = len(security_report.get("code_issues", []))
+
+        return report, overall_blocking, vuln_count, issue_count
 
     report, overall_blocking, vuln_count, issue_count = asyncio.run(run_analysis())
 

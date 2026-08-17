@@ -18,7 +18,7 @@ Timeout behavior (fail-safe):
 from __future__ import annotations
 
 import time
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 from langgraph.checkpoint.memory import MemorySaver
@@ -26,7 +26,7 @@ from langgraph.graph import StateGraph
 from typing_extensions import TypedDict
 
 
-class HumanLoopState(str, Enum):
+class HumanLoopState(StrEnum):
     IDLE = "idle"
     WAITING_FOR_HUMAN = "waiting_for_human"
     HUMAN_RESPONDED = "human_responded"
@@ -300,11 +300,10 @@ class HumanLoopManager:
         resolved = list(state.get("resolved_items", []))
 
         for item in pending:
-            finding_id = item.get("finding_id") or item.get("cve_id") or item.get("rule_id", "")
             resolved.append({
                 **item,
                 "verdict": "block",
-                "reason": f"Human loop timeout — defaulting to block (fail-safe)",
+                "reason": "Human loop timeout — defaulting to block (fail-safe)",
                 "operator": "system:timeout",
                 "appealable": True,  # Can still appeal after timeout
             })

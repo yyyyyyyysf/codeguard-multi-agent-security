@@ -6,8 +6,6 @@ Invalid input is rejected before any business logic runs.
 
 from __future__ import annotations
 
-import os
-
 from pydantic import BaseModel, Field, field_validator
 
 
@@ -75,7 +73,12 @@ class AnalyzeRequest(BaseModel):
 class AppealRequest(BaseModel):
     """POST /api/v1/tasks/{task_id}/appeal request body."""
     finding_id: str = Field(..., description="CVE ID or rule ID to appeal", min_length=1)
-    reason: str = Field(..., description="Justification for the exemption", min_length=10, max_length=2000)
+    reason: str = Field(
+        ...,
+        description="Justification for the exemption",
+        min_length=10,
+        max_length=2000,
+    )
     evidence_url: str | None = Field(default=None, description="Supporting evidence URL")
 
 

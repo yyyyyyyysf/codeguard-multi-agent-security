@@ -12,8 +12,6 @@ Flow:
 
 from __future__ import annotations
 
-import hashlib
-import hmac
 import os
 
 from fastapi import APIRouter, Header, HTTPException, Request
@@ -46,6 +44,8 @@ async def github_webhook(
     # Step 1: Verify signature
     secret = os.getenv("GITHUB_WEBHOOK_SECRET", "")
     if not secret:
+        from src.monitoring.metrics import get_metrics
+        get_metrics().inc("webhook_rejected_total", tags={"reason": "secret_not_configured"})
         logger.error("webhook_secret_not_configured")
         raise HTTPException(
             status_code=503,
@@ -53,14 +53,24 @@ async def github_webhook(
         )
 
     if not x_hub_signature_256:
-        logger.warning("webhook_missing_signature", ip=request.client.host if request.client else "unknown")
+        from src.monitoring.metrics import get_metrics
+        get_metrics().inc("webhook_rejected_total", tags={"reason": "missing_signature"})
+        logger.warning(
+            "webhook_missing_signature", ip=request.client.host if request.client else "unknown"
+        )
         raise HTTPException(status_code=401, detail="Missing X-Hub-Signature-256 header")
 
     if not verify_signature(body_bytes, secret, x_hub_signature_256):
-        logger.warning("webhook_invalid_signature", ip=request.client.host if request.client else "unknown")
+        from src.monitoring.metrics import get_metrics
+        get_metrics().inc("webhook_rejected_total", tags={"reason": "invalid_signature"})
+        logger.warning(
+            "webhook_invalid_signature", ip=request.client.host if request.client else "unknown"
+        )
         raise HTTPException(status_code=401, detail="Invalid signature")
 
     # Step 2: Return 200 immediately
+    from src.monitoring.metrics import get_metrics
+    get_metrics().inc("webhook_received_total", tags={"event_type": x_github_event or "unknown"})
     logger.info("webhook_received", event_type=x_github_event or "unknown")
 
     # Step 3: Dispatch asynchronously (background task)
@@ -71,8 +81,9 @@ async def github_webhook(
         return JSONResponse(content={"message": "pong"})
 
     # Dispatch to GitHub handler
-    from src.webhook.handlers.github import handle_github_event
     import asyncio
+
+    from src.webhook.handlers.github import handle_github_event
     asyncio.create_task(handle_github_event(event_type, body_str, request))
 
     return JSONResponse(content={"message": "accepted"})

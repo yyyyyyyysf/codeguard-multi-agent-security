@@ -18,10 +18,6 @@ from __future__ import annotations
 from typing import Any
 
 from src.core.constants import (
-    SCAN_CACHE_KEY,
-    SCAN_CACHE_TTL,
-    TASK_DEDUP_KEY,
-    TASK_DEDUP_TTL,
     TASK_PROGRESS_KEY,
     TASK_RESULT_KEY,
     TASK_RESULT_TTL,
@@ -92,6 +88,7 @@ class Orchestrator:
         code_metadata: dict[str, Any],
         scan_scope: ScanScope = ScanScope.FULL,
         target_version: dict[str, str] | None = None,
+        scan_config: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Run the full analysis pipeline.
 
@@ -109,10 +106,12 @@ class Orchestrator:
             code_metadata: Preprocessed CodeMetadata dict.
             scan_scope: FULL or DIFF.
             target_version: Optional migration target {framework, from_version, to_version}.
+            scan_config: Optional SecurityScanConfig overrides.
 
         Returns:
             Aggregated report dict.
         """
+        scan_config = scan_config or {}
         await self._update_task_status(task_id, ScanStatus.RUNNING.value)
         await self._update_progress(task_id, "security")
 
@@ -121,7 +120,7 @@ class Orchestrator:
         await self._event_bus.publish_code_metadata_ready(
             task_id=task_id,
             scan_id=scan_id,
-            payload={
+            metadata={
                 "metadata": code_metadata,
                 "target_version": target_version,
             },
@@ -140,6 +139,7 @@ class Orchestrator:
             scan_id=scan_id,
             code_metadata=code_metadata,
             scan_scope=scan_scope.value,
+            scan_config=scan_config,
         )
 
         # Run Conflict Agent with Security output
@@ -179,7 +179,7 @@ class Orchestrator:
         await self._event_bus.publish_migration_complete(
             task_id=task_id,
             scan_id=scan_id,
-            payload=migration_result.get("data", {}) if migration_result else {},
+            migration_report=migration_result.get("data", {}) if migration_result else {},
         )
 
         # --- Step 4: Report aggregation ---
@@ -204,7 +204,7 @@ class Orchestrator:
         await self._event_bus.publish_analysis_complete(
             task_id=task_id,
             scan_id=scan_id,
-            payload=aggregated_report,
+            aggregated_report=aggregated_report,
         )
 
         # --- Step 5: Finalize ---

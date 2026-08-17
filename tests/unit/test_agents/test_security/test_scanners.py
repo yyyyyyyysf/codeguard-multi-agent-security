@@ -1,9 +1,10 @@
 """Tests for CVE scanner and code scanner pure logic."""
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from src.agents.security.agent import _is_dep_manifest, SecurityAuditAgent
+import pytest
+
+from src.agents.security.agent import SecurityAuditAgent, _is_dep_manifest
 from src.agents.security.code_scanner import CodeScanner
 from src.agents.security.cve_scanner import CVEScanner
 
@@ -295,7 +296,6 @@ class TestCodeScannerWithMockSandbox:
         mock_result.stderr = ""
 
         with patch("src.agents.security.code_scanner.run_tool_safely", return_value=(0, mock_result.stdout, "")):
-            import asyncio
             issues, degraded, reason = await scanner.scan(
                 str(tmp_path),
                 [{"path": "app.py", "language": "python", "file_size": 50}],

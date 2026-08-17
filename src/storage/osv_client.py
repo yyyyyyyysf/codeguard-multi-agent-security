@@ -35,7 +35,7 @@ class OSVClient:
         self.timeout = timeout
         self._client: httpx.AsyncClient | None = None
 
-    async def __aenter__(self) -> "OSVClient":
+    async def __aenter__(self) -> OSVClient:
         self._client = httpx.AsyncClient(
             base_url=self.base_url,
             timeout=httpx.Timeout(self.timeout),
@@ -118,7 +118,8 @@ class OSVClient:
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
         output: dict[str, list[dict[str, Any]]] = {}
-        for (name, ver, _), result in zip(packages, results):
+        # results align 1:1 with packages (gather preserves order).
+        for (name, ver, _), result in zip(packages, results):  # noqa: B905
             key = f"{name}@{ver}"
             if isinstance(result, Exception):
                 output[key] = []  # Degraded: no results for this package

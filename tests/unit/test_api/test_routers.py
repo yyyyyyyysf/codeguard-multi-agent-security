@@ -1,8 +1,9 @@
 """Tests for API routers (analyze, appeal, rules, health)."""
 
 import sys
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
 from fastapi.testclient import TestClient
 
 
@@ -49,6 +50,54 @@ def client_with_celery_mock():
                 yield c
 
 
+class FakeRedis:
+    """Minimal in-memory Redis stand-in for router tests."""
+
+    def __init__(self):
+        self.store = {}
+
+    async def setex(self, key, ttl, value):
+        self.store[key] = value
+
+    async def rpush(self, key, value):
+        self.store.setdefault(key, []).append(value)
+
+    async def expire(self, key, ttl):
+        pass
+
+    async def get(self, key):
+        return self.store.get(key)
+
+    async def lrange(self, key, start, end):
+        return self.store.get(key, [])
+
+    async def close(self):
+        pass
+
+
+@pytest.fixture
+def client_with_redis():
+    """Test client with an in-memory Redis stand-in.
+
+    The app lifespan tries to connect to Redis and would overwrite
+    ``app.state.redis`` with None on failure, so the fake is injected
+    *after* the TestClient context has started. REDIS_URL points at a
+    closed port so the lifespan fails fast instead of timing out.
+    """
+    env = {
+        "CODEGUARD_API_KEY": "test-api-key",
+        "REDIS_URL": "redis://127.0.0.1:1/0",
+    }
+    with patch.dict("os.environ", env):
+        from src.api.app import create_app
+
+        app = create_app()
+        with TestClient(app) as c:
+            app.state.redis = FakeRedis()
+            c.headers["X-API-Key"] = "test-api-key"
+            yield c
+
+
 class TestAnalyzeEndpoint:
     def test_submit_valid_request(self, client_with_celery_mock):
         resp = client_with_celery_mock.post(
@@ -89,7 +138,8 @@ class TestAnalyzeEndpoint:
 
 
 class TestAppealEndpoint:
-    def test_submit_appeal(self, client):
+    @patch("src.api.routers.appeal._dispatch_appeal_resume", return_value=True)
+    def test_submit_appeal(self, mock_dispatch, client):
         resp = client.post(
             "/api/v1/tasks/fake-task-id/appeal",
             json={
@@ -102,6 +152,34 @@ class TestAppealEndpoint:
         data = resp.json()
         assert "appeal_id" in data
         assert data["status"] == "pending_review"
+        mock_dispatch.assert_called_once()
+
+    @patch("src.api.routers.appeal._dispatch_appeal_resume", return_value=True)
+    def test_get_appeals_empty_without_redis(self, mock_dispatch, client):
+        resp = client.get("/api/v1/tasks/fake-task-id/appeals")
+        assert resp.status_code == 200
+        assert resp.json() == {"task_id": "fake-task-id", "appeals": []}
+
+    @patch("src.api.routers.appeal._dispatch_appeal_resume", return_value=True)
+    def test_appeal_roundtrip_with_redis(self, mock_dispatch, client_with_redis):
+        resp = client_with_redis.post(
+            "/api/v1/tasks/task-42/appeal",
+            json={
+                "finding_id": "CVE-2024-0001",
+                "reason": "This vulnerability requires local access, not applicable to cloud deployment",
+                "evidence_url": "https://nvd.nist.gov/vuln/detail/CVE-2024-0001",
+            },
+        )
+        assert resp.status_code == 200
+        appeal_id = resp.json()["appeal_id"]
+
+        resp = client_with_redis.get("/api/v1/tasks/task-42/appeals")
+        assert resp.status_code == 200
+        appeals = resp.json()["appeals"]
+        assert len(appeals) == 1
+        assert appeals[0]["appeal_id"] == appeal_id
+        assert appeals[0]["status"] == "pending_review"
+        assert appeals[0]["task_id"] == "task-42"
 
 
 class TestRulesEndpoint:
@@ -111,12 +189,12 @@ class TestRulesEndpoint:
         data = resp.json()
         assert "rules" in data
 
-    def test_update_rule_not_implemented(self, client):
+    def test_update_rule_not_found(self, client):
         resp = client.put(
             "/api/v1/rules/rule-1",
             json={"enabled": False},
         )
-        assert resp.status_code == 501
+        assert resp.status_code == 404
 
 
 class TestHealthEndpoint:

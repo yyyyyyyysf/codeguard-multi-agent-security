@@ -1,10 +1,11 @@
 """Tests for SecurityAuditAgent execution and degradation."""
 
+from unittest.mock import AsyncMock, MagicMock
+
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
 
 from src.agents.security.agent import SecurityAuditAgent
-from src.agents.security.models import SecurityReport, Vulnerability
+from src.agents.security.models import SecurityReport
 
 
 class TestSecurityAuditAgent:
@@ -151,7 +152,7 @@ class TestSecurityAuditAgent:
         data = result["data"]
         assert len(data["vulnerabilities"]) == 0
         assert len(data["code_issues"]) == 0
-        assert data.get("degraded") == False
+        assert data.get("degraded") is False
 
     @pytest.mark.asyncio
     async def test_agent_output_is_valid_security_report(self, agent, sample_code_metadata):

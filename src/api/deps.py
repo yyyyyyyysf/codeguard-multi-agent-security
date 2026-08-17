@@ -14,9 +14,6 @@ import os
 
 from fastapi import Header, HTTPException, Request
 
-from src.core.errors import TaskNotFoundError, UnauthorizedActionError
-
-
 # ------------------------------------------------------------------
 # API Key auth
 # ------------------------------------------------------------------
@@ -36,7 +33,12 @@ async def verify_api_key(
     if not configured_key:
         raise HTTPException(
             status_code=401,
-            detail={"error": {"code": "SEC-003", "message": "API key not configured. Set CODEGUARD_API_KEY."}},
+            detail={
+                "error": {
+                    "code": "SEC-003",
+                    "message": "API key not configured. Set CODEGUARD_API_KEY.",
+                }
+            }
         )
 
     if not x_api_key:
@@ -72,9 +74,15 @@ async def get_task_state(task_id: str, request: Request) -> dict:
     try:
         raw = await redis.get(key)
         if not raw:
-            raise HTTPException(status_code=404, detail={"error": {"code": "TASK-001", "message": "Task not found"}})
+            raise HTTPException(
+                status_code=404,
+                detail={"error": {"code": "TASK-001", "message": "Task not found"}},
+            )
         return json.loads(raw)
     except HTTPException:
         raise
     except Exception:
-        raise HTTPException(status_code=404, detail={"error": {"code": "TASK-001", "message": "Task not found"}})
+        raise HTTPException(
+            status_code=404,
+            detail={"error": {"code": "TASK-001", "message": "Task not found"}},
+        ) from None

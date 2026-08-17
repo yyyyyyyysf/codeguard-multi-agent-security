@@ -1,7 +1,8 @@
 """Tests for GitHubClient - Check Runs, PR comments, idempotency, retry."""
 
+from unittest.mock import AsyncMock, MagicMock
+
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
 
 from src.integrations.github_client import GitHubClient
 

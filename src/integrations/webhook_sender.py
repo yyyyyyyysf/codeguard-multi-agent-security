@@ -130,7 +130,9 @@ class WebhookSender:
             try:
                 ok, error = await self._send_once(callback_url, body)
                 if ok:
-                    logger.info("webhook_callback_success", url=callback_url[:80], attempt=attempt + 1)
+                    logger.info(
+                        "webhook_callback_success", url=callback_url[:80], attempt=attempt + 1
+                    )
                     return True
                 last_error = error
             except Exception as e:

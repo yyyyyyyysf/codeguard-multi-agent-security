@@ -6,8 +6,9 @@ Celery decorators are framework plumbing tested via integration.
 
 import json
 import os
-import pytest
 from unittest.mock import MagicMock, patch
+
+import pytest
 
 
 class TestRedisHelpers:

@@ -16,12 +16,9 @@ Confidence levels:
 from __future__ import annotations
 
 import json
-import os
-import time
 from pathlib import Path
 from typing import Any
 
-from src.core.errors import ScanPartialFailedError
 from src.utils.sandbox import run_tool_safely
 
 # Check Semgrep availability
@@ -87,7 +84,6 @@ class CodeScanner:
         Returns:
             (code_issues, degraded, degraded_reason) tuple.
         """
-        started = time.monotonic()
         blacklist = file_blacklist or ["test/", "tests/", "docs/"]
 
         # Filter to scan-eligible files
@@ -124,9 +120,10 @@ class CodeScanner:
             confidence = issue.get("confidence", "medium")
             rule_id = issue.get("rule_id", "")
 
-            if rule_id in ALWAYS_BLOCKING_RULES:
-                issue["blocking"] = True
-            elif severity in ("critical", "high") and confidence != "low":
+            if (
+                rule_id in ALWAYS_BLOCKING_RULES
+                or severity in ("critical", "high") and confidence != "low"
+            ):
                 issue["blocking"] = True
             else:
                 issue["blocking"] = False
@@ -263,9 +260,5 @@ class CodeScanner:
             if ext not in valid_extensions:
                 return False
 
-        # Blacklist filter
-        for pattern in blacklist:
-            if pattern.rstrip("/") in file_path:
-                return False
-
-        return True
+        # Blacklist filter: return False if any blacklisted path matches
+        return all(pattern.rstrip("/") not in file_path for pattern in blacklist)

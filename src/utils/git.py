@@ -12,7 +12,7 @@ from pathlib import Path
 from git import GitCommandError, InvalidGitRepositoryError, Repo
 from git.exc import GitError
 
-from src.core.constants import DEFAULT_BRANCH, GIT_CLONE_DEPTH, GIT_CLONE_TIMEOUT
+from src.core.constants import DEFAULT_BRANCH, GIT_CLONE_DEPTH
 from src.core.errors import RepoCloneFailedError
 
 

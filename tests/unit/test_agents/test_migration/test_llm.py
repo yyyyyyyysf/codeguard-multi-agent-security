@@ -1,7 +1,9 @@
 """Tests for LLMAnalyzer prompt building and response parsing."""
 
+from unittest.mock import patch
+
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+
 from src.agents.migration.llm_analyzer import LLMAnalyzer
 
 
@@ -29,7 +31,7 @@ class TestLLMAnalyzerPrompt:
             "f", "1.0", "2.0",
         )
         # Content should be truncated to 2000 chars
-        assert len([l for l in prompt.split("\n") if "print" in l]) < len(long_content.split("\n"))
+        assert len([line for line in prompt.split("\n") if "print" in line]) < len(long_content.split("\n"))
 
     def test_build_prompt_handles_diff_lines(self):
         analyzer = LLMAnalyzer()

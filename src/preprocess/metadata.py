@@ -19,7 +19,6 @@ from typing import Any
 from git import Repo
 
 from src.core.constants import DEFAULT_BRANCH
-from src.core.errors import ASTParseFailedError, RepoCloneFailedError
 from src.core.models import ScanScope
 from src.preprocess.dependency import parse_dependencies
 from src.preprocess.parser import detect_language, parse_files_batch

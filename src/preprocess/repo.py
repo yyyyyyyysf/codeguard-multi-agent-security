@@ -6,14 +6,13 @@ All operations are synchronous (called from Celery worker, not async context).
 
 from __future__ import annotations
 
-import os
 import shutil
 from pathlib import Path
 
 from git import GitCommandError, Repo
 from git.exc import GitError
 
-from src.core.constants import DEFAULT_BRANCH, GIT_CLONE_DEPTH, GIT_CLONE_TIMEOUT
+from src.core.constants import DEFAULT_BRANCH, GIT_CLONE_DEPTH
 from src.core.errors import RepoCloneFailedError
 from src.core.models import ChangeType
 
@@ -175,5 +174,9 @@ def cleanup_work_dir(work_dir: str | Path) -> None:
 
 def _map_change_type(git_change_type: str) -> str:
     """Map GitPython change type to our ChangeType enum values."""
-    mapping = {"A": ChangeType.ADDED.value, "M": ChangeType.MODIFIED.value, "D": ChangeType.DELETED.value}
+    mapping = {
+        "A": ChangeType.ADDED.value,
+        "M": ChangeType.MODIFIED.value,
+        "D": ChangeType.DELETED.value,
+    }
     return mapping.get(git_change_type, ChangeType.MODIFIED.value)

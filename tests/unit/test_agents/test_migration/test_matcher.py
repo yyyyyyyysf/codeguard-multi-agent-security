@@ -1,6 +1,7 @@
 """Tests for ChangelogMatcher — deterministic pattern matching."""
 
 import pytest
+
 from src.agents.migration.changelog_matcher import ChangelogMatcher
 
 

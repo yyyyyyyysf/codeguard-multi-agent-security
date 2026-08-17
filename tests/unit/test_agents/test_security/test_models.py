@@ -1,11 +1,13 @@
 """Tests for Security Audit Agent data models."""
 
 import pytest
+from pydantic import ValidationError
+
 from src.agents.security.models import (
+    CodeIssue,
     SecurityReport,
     SecurityScanConfig,
     Vulnerability,
-    CodeIssue,
 )
 
 
@@ -44,7 +46,7 @@ class TestVulnerability:
         assert v.fixed_version == "2.31.0"
 
     def test_cvss_validation(self):
-        with pytest.raises(Exception):  # Pydantic validation
+        with pytest.raises(ValidationError):  # Pydantic validation
             Vulnerability(
                 cve_id="CVE-2024-0001",
                 package_name="test",

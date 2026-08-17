@@ -16,7 +16,7 @@ import hashlib
 import json
 import os
 import sqlite3
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 
@@ -69,7 +69,7 @@ class AuditLogger:
             The auto-generated entry ID.
         """
         conn = self._get_conn()
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
 
         # Get previous row hash for chain integrity
         prev = conn.execute(

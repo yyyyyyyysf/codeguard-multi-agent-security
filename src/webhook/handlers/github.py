@@ -150,7 +150,10 @@ async def _trigger_scan(
             existing = await redis.get(f"codeguard:task:dedup:{dedup_key}")
             if existing:
                 logger.info("webhook_idempotent_skip", repo=repo_full_name, sha=head_sha[:8])
-                return {"task_id": existing.decode() if isinstance(existing, bytes) else existing, "cached": True}
+                return {
+                    "task_id": existing.decode() if isinstance(existing, bytes) else existing,
+                    "cached": True,
+                }
 
     # Generate task_id
     task_id = generate_task_id()

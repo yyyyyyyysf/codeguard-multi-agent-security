@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+from datetime import UTC
 from typing import Any
 
 import httpx
@@ -50,7 +51,7 @@ class GitHubClient:
         self._client: httpx.AsyncClient | None = None
         self._base_url = "https://api.github.com"
 
-    async def __aenter__(self) -> "GitHubClient":
+    async def __aenter__(self) -> GitHubClient:
         headers: dict[str, str] = {
             "Accept": "application/vnd.github+json",
             "X-GitHub-Api-Version": "2022-11-28",
@@ -265,7 +266,9 @@ class GitHubClient:
             return None
 
         if not response.is_success:
-            logger.error("github_unexpected_error", status=response.status_code, body=response.text[:300])
+            logger.error(
+                "github_unexpected_error", status=response.status_code, body=response.text[:300]
+            )
             return None
 
         try:
@@ -279,8 +282,8 @@ class GitHubClient:
 
     @staticmethod
     def _now() -> str:
-        from datetime import datetime, timezone
-        return datetime.now(timezone.utc).isoformat()
+        from datetime import datetime
+        return datetime.now(UTC).isoformat()
 
     @staticmethod
     def idempotency_key(scan_id: str, repo: str, pr_number: int) -> str:

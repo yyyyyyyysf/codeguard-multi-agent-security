@@ -1,10 +1,8 @@
 """Tests for middleware — error handlers, logging, rate limiting."""
 
+
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
 from fastapi.testclient import TestClient
-from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
 
 from src.core.errors import TaskNotFoundError, UnauthorizedActionError
 

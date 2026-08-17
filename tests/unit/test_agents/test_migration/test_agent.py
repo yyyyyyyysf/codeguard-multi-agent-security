@@ -1,7 +1,8 @@
 """Tests for MigrationAssessmentAgent lifecycle and degradation."""
 
+
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+
 from src.agents.migration.agent import MigrationAssessmentAgent
 
 

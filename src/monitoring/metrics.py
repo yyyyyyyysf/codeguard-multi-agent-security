@@ -61,7 +61,9 @@ class MetricsCollector:
         self._histograms[key].append(value)
         logger.debug("metric_histogram", metric=name, value=value, **self._safe_tags(tags))
 
-    def get_histogram_stats(self, name: str, tags: dict[str, str] | None = None) -> dict[str, float]:
+    def get_histogram_stats(
+        self, name: str, tags: dict[str, str] | None = None
+    ) -> dict[str, float]:
         values = self._histograms.get(self._format_key(name, tags), [])
         if not values:
             return {"count": 0, "sum": 0, "avg": 0, "p95": 0}

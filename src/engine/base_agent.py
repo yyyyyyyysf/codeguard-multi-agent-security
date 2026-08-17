@@ -64,6 +64,9 @@ class BaseAgent(ABC):
         self.run_id = generate_id()
         self._start_time = time.monotonic()
 
+        from src.monitoring.metrics import get_metrics
+
+        get_metrics().inc("agent_run_total", tags={"agent": self.agent_id})
         await self.on_start(**kwargs)
 
         try:
@@ -87,6 +90,15 @@ class BaseAgent(ABC):
         await self.on_complete(result, success, error)
 
         duration_ms = (time.monotonic() - self._start_time) * 1000
+        get_metrics().observe(
+            "agent_duration_ms",
+            duration_ms,
+            tags={"agent": self.agent_id},
+        )
+        if not success:
+            get_metrics().inc("agent_failure_total", tags={"agent": self.agent_id})
+        if self._degraded:
+            get_metrics().inc("agent_degraded_total", tags={"agent": self.agent_id})
 
         return {
             "agent_id": self.agent_id,

@@ -49,7 +49,9 @@ class AuditEntry(BaseModel):
         ..., description="UTC ISO 8601"
     )
     action: str = Field(
-        ..., description="verdict_made | appeal_submitted | appeal_approved | blocking_executed | rule_matched"
+        ...,
+        # Long description literal kept intact for readability of the action enum values.
+        description="verdict_made | appeal_submitted | appeal_approved | blocking_executed | rule_matched",  # noqa: E501
     )
     detail: dict = Field(
         default_factory=dict, description="Structured details of the action"

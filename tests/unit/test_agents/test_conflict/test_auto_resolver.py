@@ -1,8 +1,8 @@
 """Tests for AutoResolver — all 5 core rules, edge cases, error paths."""
 
 import pytest
-from src.agents.conflict.auto_resolver import AutoResolver, ALWAYS_BLOCKING_RULES
-from src.core.models import Verdict
+
+from src.agents.conflict.auto_resolver import AutoResolver
 
 
 @pytest.fixture
@@ -103,7 +103,11 @@ class TestRule3UpgradeAutofix:
         resolved, _ = resolver.resolve(
             vulns, [],
             is_framework_upgrade=True,
-            target_version={"framework": "fastapi", "from_version": "0.100.0", "to_version": "0.110.0"},
+            target_version={
+                "framework": "fastapi",
+                "from_version": "0.100.0",
+                "to_version": "0.110.0",
+            },
         )
         assert resolved[0]["verdict"] == "waive"
         assert "upgrade_autofix" in resolved[0]["rule_id"]
@@ -121,7 +125,11 @@ class TestRule3UpgradeAutofix:
         resolved, _ = resolver.resolve(
             vulns, [],
             is_framework_upgrade=True,
-            target_version={"framework": "fastapi", "from_version": "0.100.0", "to_version": "0.110.0"},
+            target_version={
+                "framework": "fastapi",
+                "from_version": "0.100.0",
+                "to_version": "0.110.0",
+            },
         )
         assert resolved[0]["verdict"] == "block"
 

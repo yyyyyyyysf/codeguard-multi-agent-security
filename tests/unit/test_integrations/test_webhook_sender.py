@@ -1,7 +1,8 @@
 """Tests for WebhookSender — signing, retry, event types."""
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 from src.integrations.webhook_sender import WebhookSender
 from src.utils.hashing import compute_hmac_sha256, verify_signature
@@ -78,7 +79,7 @@ class TestWebhookSenderMockHTTP:
 
         # Override retry to be fast
         with patch("httpx.AsyncClient", return_value=mock_client), \
-             patch.object(sender, "_send_with_retry", wraps=sender._send_with_retry) as spy, \
+             patch.object(sender, "_send_with_retry", wraps=sender._send_with_retry), \
              patch("time.sleep", return_value=None):  # Speed up retries
             # Override backoff to be instant
             with patch("src.integrations.webhook_sender.WEBHOOK_RETRY_BACKOFF", [0, 0, 0, 0, 0]):

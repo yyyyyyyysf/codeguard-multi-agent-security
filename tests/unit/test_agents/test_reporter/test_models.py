@@ -1,6 +1,5 @@
 """Tests for Report Aggregation Agent data models."""
 
-import pytest
 from src.agents.reporter.models import AggregatedReport, ReportSummary
 
 

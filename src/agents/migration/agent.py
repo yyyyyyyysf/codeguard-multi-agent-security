@@ -189,7 +189,9 @@ class MigrationAssessmentAgent(BaseAgent):
         to_ver = target_version.get("to_version", "")
 
         changed_files = code_metadata.get("changed_files", [])
-        ast_impacts = self._matcher.match(changed_files, framework, from_ver, to_ver) if framework else []
+        ast_impacts = (
+            self._matcher.match(changed_files, framework, from_ver, to_ver) if framework else []
+        )
 
         all_impacts = self._merge_impacts(ast_impacts, [])
         risk_level = self._assess_risk(all_impacts, from_ver, to_ver)

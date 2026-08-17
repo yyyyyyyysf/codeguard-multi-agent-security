@@ -1,6 +1,5 @@
 """Tests for Migration Assessment Agent data models."""
 
-import pytest
 from src.agents.migration.models import (
     AffectedFile,
     BreakingChangeImpact,

@@ -82,7 +82,7 @@ def send_callback_task(
     except Exception as exc:
         logger.error("callback_error", task_id=task_id, error=str(exc)[:200])
         if self.request.retries < self.max_retries:
-            raise self.retry(exc=exc, countdown=5)
+            raise self.retry(exc=exc, countdown=5) from None
         return {"task_id": task_id, "status": "failed", "error": str(exc)[:200]}
 
 

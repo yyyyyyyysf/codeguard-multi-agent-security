@@ -73,7 +73,9 @@ class EventBus:
                 await self._redis.publish(channel, event_json)
                 return True
             except Exception as e:
-                logger.warning("event_bus_redis_publish_failed", channel=channel, error=str(e)[:100])
+                logger.warning(
+                    "event_bus_redis_publish_failed", channel=channel, error=str(e)[:100]
+                )
 
         # In-process subscribers (used when Redis is unavailable or in tests)
         if channel in self._subscribers:

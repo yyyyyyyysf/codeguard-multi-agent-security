@@ -7,15 +7,14 @@ live in their respective agent packages, NOT here.
 
 from __future__ import annotations
 
-from enum import Enum
-from typing import Any, Literal
-
+from enum import StrEnum
+from typing import Any
 
 # ============================================================
 # Severity enums
 # ============================================================
 
-class Severity(str, Enum):
+class Severity(StrEnum):
     """Vulnerability severity aligned with CVSS v3.1."""
     CRITICAL = "critical"   # CVSS 9.0-10.0
     HIGH = "high"           # CVSS 7.0-8.9
@@ -23,7 +22,7 @@ class Severity(str, Enum):
     LOW = "low"             # CVSS 0.1-3.9
 
     @classmethod
-    def from_cvss(cls, score: float) -> "Severity":
+    def from_cvss(cls, score: float) -> Severity:
         if score >= 9.0:
             return cls.CRITICAL
         if score >= 7.0:
@@ -38,7 +37,7 @@ class Severity(str, Enum):
         return self in (Severity.CRITICAL, Severity.HIGH)
 
 
-class Confidence(str, Enum):
+class Confidence(StrEnum):
     """Confidence level for a finding."""
     HIGH = "high"
     MEDIUM = "medium"
@@ -49,13 +48,13 @@ class Confidence(str, Enum):
 # Scan enums
 # ============================================================
 
-class ScanScope(str, Enum):
+class ScanScope(StrEnum):
     """Whether a scan covers the full repo or only the PR diff."""
     FULL = "full"
     DIFF = "diff"
 
 
-class ScanStatus(str, Enum):
+class ScanStatus(StrEnum):
     """Lifecycle status of an analysis task."""
     PENDING = "pending"
     RUNNING = "running"
@@ -63,7 +62,7 @@ class ScanStatus(str, Enum):
     FAILED = "failed"
 
 
-class ScanStage(str, Enum):
+class ScanStage(StrEnum):
     """Current execution stage within a running task."""
     PREPROCESS = "preprocess"
     SECURITY = "security"
@@ -76,14 +75,14 @@ class ScanStage(str, Enum):
 # Security enums
 # ============================================================
 
-class Verdict(str, Enum):
+class Verdict(StrEnum):
     """Final decision on a security finding."""
     BLOCK = "block"     # Must be fixed before merge
     WAIVE = "waive"     # Approved exemption
     DEFER = "defer"     # Deferred for later (not blocking now)
 
 
-class FindingType(str, Enum):
+class FindingType(StrEnum):
     """Type of a security finding."""
     VULNERABILITY = "vulnerability"
     CODE_ISSUE = "code_issue"
@@ -93,20 +92,20 @@ class FindingType(str, Enum):
 # Migration enums
 # ============================================================
 
-class RiskLevel(str, Enum):
+class RiskLevel(StrEnum):
     """Overall migration risk level."""
     HIGH = "high"
     MEDIUM = "medium"
     LOW = "low"
 
 
-class ImpactLevel(str, Enum):
+class ImpactLevel(StrEnum):
     """Per-file impact severity."""
     BREAKING = "breaking"
     WARNING = "warning"
 
 
-class AnalysisSource(str, Enum):
+class AnalysisSource(StrEnum):
     """How a migration finding was produced."""
     AST_RULE = "ast_rule"       # Deterministic Tree-sitter rule match
     LLM_ANALYSIS = "llm_analysis"  # LLM-assisted analysis
@@ -116,13 +115,13 @@ class AnalysisSource(str, Enum):
 # Dependency enums
 # ============================================================
 
-class DependencyType(str, Enum):
+class DependencyType(StrEnum):
     """Whether a dependency is direct or transitive."""
     DIRECT = "direct"
     TRANSITIVE = "transitive"
 
 
-class Ecosystem(str, Enum):
+class Ecosystem(StrEnum):
     """Package ecosystem for vulnerability lookups."""
     PYPI = "pypi"
     NPM = "npm"
@@ -135,7 +134,7 @@ class Ecosystem(str, Enum):
 # Evidence source
 # ============================================================
 
-class EvidenceSource(str, Enum):
+class EvidenceSource(StrEnum):
     """Origin of a vulnerability finding."""
     OSV = "OSV"
     GITHUB_ADVISORY = "GitHub Advisory"
@@ -147,14 +146,14 @@ class EvidenceSource(str, Enum):
 # Rule enums
 # ============================================================
 
-class RuleType(str, Enum):
+class RuleType(StrEnum):
     """Type of an exemption rule."""
     CVE_WHITELIST = "cve_whitelist"
     PATH_WHITELIST = "path_whitelist"
     SEVERITY_DOWNGRADE = "severity_downgrade"
 
 
-class RuleScope(str, Enum):
+class RuleScope(StrEnum):
     """Scope of an exemption rule."""
     GLOBAL = "global"
     # Future: REPO, PATH
@@ -164,7 +163,7 @@ class RuleScope(str, Enum):
 # File change enums
 # ============================================================
 
-class ChangeType(str, Enum):
+class ChangeType(StrEnum):
     """Type of file change in a diff."""
     ADDED = "added"
     MODIFIED = "modified"

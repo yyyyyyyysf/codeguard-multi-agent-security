@@ -77,7 +77,7 @@ def _parse_requirements_txt(filepath: Path) -> list[dict[str, Any]]:
                 continue
 
             # Parse "package==version" or "package>=version" etc.
-            match = re.match(r"^([a-zA-Z0-9_.-]+)\s*([><=!~]+\s*[\d.*]+(?:\s*,\s*[><=!~]+\s*[\d.*]+)*)?", line)
+            match = re.match(r"^([a-zA-Z0-9_.-]+)\s*([><=!~]+\s*[\d.*]+(?:\s*,\s*[><=!~]+\s*[\d.*]+)*)?", line)  # noqa: E501
             if match:
                 name = match.group(1).lower()
                 version = match.group(2).strip() if match.group(2) else "latest"
@@ -123,7 +123,7 @@ def _parse_pyproject_toml(filepath: Path) -> list[dict[str, Any]]:
 
     # Optional dependency groups
     optional = project.get("optional-dependencies", {})
-    for group, group_deps in optional.items():
+    for _, group_deps in optional.items():
         for dep_str in group_deps:
             parsed = _parse_pep508_dep(dep_str)
             if parsed:

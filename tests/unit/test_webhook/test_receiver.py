@@ -4,8 +4,9 @@ import hashlib
 import hmac
 import json
 import sys
-import pytest
 from unittest.mock import MagicMock, patch
+
+import pytest
 from fastapi.testclient import TestClient
 
 _TEST_SECRET = "test-secret"

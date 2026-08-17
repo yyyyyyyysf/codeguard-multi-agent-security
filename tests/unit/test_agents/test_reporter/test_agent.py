@@ -1,6 +1,9 @@
 """Tests for ReportAggregationAgent rendering and aggregation."""
 
+from unittest.mock import MagicMock
+
 import pytest
+
 from src.agents.reporter.agent import ReportAggregationAgent
 
 
@@ -63,6 +66,42 @@ class TestReportAgent:
                 "human_intervention_required": False,
             },
         }
+
+    @pytest.mark.asyncio
+    async def test_report_persisted_when_report_store_provided(
+        self, sample_security_data
+    ):
+        report_store = MagicMock()
+        agent = ReportAggregationAgent(report_store=report_store)
+        result = await agent.execute(
+            security_data=sample_security_data,
+            migration_data={},
+            repo_url="https://github.com/x/y",
+            code_metadata={"commit_sha": "abc", "scan_scope": "full"},
+            scan_id="s1",
+            task_id="t1",
+        )
+        assert result["success"] is True
+        report_store.save_json.assert_called_once()
+        saved_scan_id = report_store.save_json.call_args[0][0]
+        assert saved_scan_id == "s1"
+
+    @pytest.mark.asyncio
+    async def test_report_persist_failure_is_non_fatal(
+        self, sample_security_data
+    ):
+        report_store = MagicMock()
+        report_store.save_json.side_effect = RuntimeError("disk full")
+        agent = ReportAggregationAgent(report_store=report_store)
+        result = await agent.execute(
+            security_data=sample_security_data,
+            migration_data={},
+            repo_url="https://github.com/x/y",
+            code_metadata={"commit_sha": "abc", "scan_scope": "full"},
+            scan_id="s1",
+            task_id="t1",
+        )
+        assert result["success"] is True
 
     @pytest.fixture
     def sample_migration_data(self):

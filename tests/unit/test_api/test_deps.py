@@ -1,8 +1,9 @@
 """Tests for dependency injection and auth."""
 
 import sys
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
 from fastapi.testclient import TestClient
 
 

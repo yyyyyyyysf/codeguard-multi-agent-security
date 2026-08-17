@@ -1,7 +1,9 @@
 """Tests for API request/response schemas (Pydantic validation)."""
 
 import pytest
-from src.api.schemas.request import AnalyzeRequest, AppealRequest, ScanConfig, PRInfo
+from pydantic import ValidationError
+
+from src.api.schemas.request import AnalyzeRequest, AppealRequest
 
 
 class TestAnalyzeRequest:
@@ -11,11 +13,11 @@ class TestAnalyzeRequest:
         assert req.branch == "main"
 
     def test_rejects_invalid_url(self):
-        with pytest.raises(Exception):
-            AnalyzeRequest(repo_url="http://github.com/user/repo")  # http, not https
+        with pytest.raises(ValidationError):
+            AnalyzeRequest(repo_url="http://github.com/user/repo")
 
     def test_rejects_invalid_scan_type(self):
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             AnalyzeRequest(repo_url="https://github.com/a/b", scan_type="invalid")
 
     def test_full_request(self):
@@ -31,7 +33,7 @@ class TestAnalyzeRequest:
         assert req.pr_info.pr_number == 42
 
     def test_rejects_http_callback(self):
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             AnalyzeRequest(
                 repo_url="https://github.com/a/b",
                 callback_url="http://insecure.com/hook",
@@ -48,9 +50,9 @@ class TestAppealRequest:
         assert req.finding_id == "CVE-2024-0001"
 
     def test_rejects_short_reason(self):
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             AppealRequest(finding_id="CVE-1", reason="short")  # < 10 chars
 
     def test_rejects_empty_finding_id(self):
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             AppealRequest(finding_id="", reason="This is a valid and long enough reason")

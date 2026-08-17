@@ -14,17 +14,13 @@ class TestFullPipeline:
     @pytest.mark.asyncio
     async def test_preprocess_to_security_to_report(self):
         """Simulate: preprocess -> security -> conflict -> report."""
-        from src.preprocess.dependency import _parse_pep508_dep
-        from src.agents.security.models import SecurityReport, Vulnerability
         from src.agents.conflict.models import FinalSecurityDecision, SecurityVerdict
         from src.agents.reporter.models import AggregatedReport
+        from src.agents.security.models import SecurityReport, Vulnerability
+        from src.preprocess.dependency import _parse_pep508_dep
 
         # Step 1: Simulated preprocess output
-        deps = [
-            {"name": "fastapi", "version": "0.100.0", "dependency_type": "direct", "ecosystem": "pypi"},
-            {"name": "requests", "version": "2.28.0", "dependency_type": "direct", "ecosystem": "pypi"},
-        ]
-
+        # Parsing sanity check rather than a full dependency list this test path doesn't consume.
         assert _parse_pep508_dep("fastapi>=0.100.0") is not None
 
         # Step 2: Simulated security report

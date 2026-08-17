@@ -1,8 +1,10 @@
 """Tests for HumanLoopManager and its LangGraph state machine."""
 
-import pytest
 import time
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
+
+import pytest
+
 from src.agents.conflict.human_loop import (
     HumanLoopManager,
     HumanLoopState,

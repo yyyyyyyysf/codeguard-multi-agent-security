@@ -12,7 +12,6 @@ Blocking logic:
 
 from __future__ import annotations
 
-import time
 from typing import Any
 
 from src.core.errors import OSVApiUnavailableError
@@ -50,7 +49,6 @@ class CVEScanner:
             (vulnerabilities, degraded, degraded_reason) tuple.
             vulnerabilities is a list of normalized Vulnerability-like dicts.
         """
-        started = time.monotonic()
         all_vulns: list[dict[str, Any]] = []
         degraded = False
         degraded_reason = ""
@@ -90,7 +88,8 @@ class CVEScanner:
                 raw_results[key] = self._cache._sqlite_lookup(name, ver, eco.value)
 
         # Normalize and classify
-        for (name, ver, eco, dep_type), (key, vulns) in zip(packages, raw_results.items()):
+        # Degraded path may leave raw_results shorter than packages; so no strict zip.
+        for (name, ver, _eco, dep_type), (_, vulns) in zip(packages, raw_results.items()):  # noqa: B905
             for v in vulns:
                 severity_str = v.get("severity", "medium")
                 try:
@@ -128,7 +127,6 @@ class CVEScanner:
                     "description": v.get("summary", v.get("description", "")),
                 })
 
-        duration_ms = int((time.monotonic() - started) * 1000)
         return all_vulns, degraded, degraded_reason
 
     def annotate_file_locations(

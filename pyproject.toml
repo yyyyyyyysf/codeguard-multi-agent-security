@@ -35,10 +35,7 @@ dependencies = [
     "gitpython>=3.1.40,<4.0.0",
     "tree-sitter>=0.21.0,<1.0.0",
     "jinja2>=3.1.0,<4.0.0",
-    "sqlalchemy>=2.0.0,<3.0.0",
-    "aiosqlite>=0.19.0,<1.0.0",
     "structlog>=24.0.0,<25.0.0",
-    "click>=8.1.0,<9.0.0",
     "typer>=0.9.0,<1.0.0",
     "python-dotenv>=1.0.0,<2.0.0",
     "pyyaml>=6.0.0,<7.0.0",
@@ -75,6 +72,26 @@ target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W", "UP", "B", "C4", "SIM"]
+
+[tool.ruff.lint.per-file-ignores]
+# lenient line length for modules that embed long multi-line string literals
+# (LLM prompt templates and Jinja2 report templates) — wrapping them would alter content.
+"src/agents/migration/llm_analyzer.py" = ["E501"]
+"src/agents/reporter/agent.py" = ["E501"]
+"src/engine/base_agent.py" = ["B027"]  # BaseAgent on_* hooks are optional template-method hook points, not mandatory abstractions
+# Test files embed long non-splittable literals (mock JSON, prompts, expected outputs);
+# wrapping them would change the tested data, so line length is exempted there.
+"tests/unit/test_agents/test_migration/test_llm.py" = ["E501"]
+"tests/unit/test_agents/test_migration/test_agent.py" = ["E501"]
+"tests/unit/test_agents/test_reporter/test_agent.py" = ["E501"]
+"tests/unit/test_agents/test_security/test_scanners.py" = ["E501"]
+"tests/unit/test_api/test_routers.py" = ["E501", "SIM117"]  # nested context managers keep patch scope explicit
+"tests/unit/test_integrations/test_github_client.py" = ["E501"]
+"tests/unit/test_integrations/test_llm_client.py" = ["SIM117"]
+"tests/unit/test_integrations/test_webhook_sender.py" = ["SIM117"]
+"tests/unit/test_storage/test_cve_cache.py" = ["SIM105"]
+"tests/unit/test_webhook/test_receiver.py" = ["E501", "SIM117"]  # nested context managers keep patch scope explicit
+"tests/integration/test_full_pipeline.py" = ["E501"]
 
 [tool.mypy]
 python_version = "3.11"

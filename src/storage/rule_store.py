@@ -14,10 +14,11 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
-from datetime import datetime, timezone
+from contextlib import suppress
+from datetime import UTC, datetime
 from typing import Any
 
-from src.core.models import RuleType, Severity
+from src.core.models import RuleType
 
 
 class RuleStore:
@@ -92,7 +93,7 @@ class RuleStore:
         from src.utils.id_gen import generate_id
 
         rule_id = generate_id()
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
 
         conn = self._get_conn()
         conn.execute(
@@ -165,13 +166,12 @@ class RuleStore:
     # ------------------------------------------------------------------
 
     def _invalidate_cache(self) -> None:
-        """Invalidate the Redis rule cache."""
+        # RuleStore uses a synchronous redis client (".get"/".setex" are sync), so
+        # deletion is synchronous too. A bare asyncio.create_task would raise
+        # RuntimeError: no running event loop inside sync callers (e.g. Celery).
         if self._redis:
-            try:
-                import asyncio
-                asyncio.create_task(self._redis.delete("config:exemption:hash"))
-            except Exception:
-                pass
+            with suppress(Exception):
+                self._redis.delete("config:exemption:hash")
 
     def _redis_get(self, key: str) -> list[dict[str, Any]] | None:
         try:
@@ -185,10 +185,8 @@ class RuleStore:
     def _redis_set(
         self, key: str, data: list[dict[str, Any]], ttl: int = 3600
     ) -> None:
-        try:
+        with suppress(Exception):
             self._redis.setex(key, ttl, json.dumps(data))
-        except Exception:
-            pass
 
     # ------------------------------------------------------------------
     # SQLite helpers

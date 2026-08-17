@@ -22,7 +22,7 @@ from typing import Any
 
 from src.agents.security.code_scanner import CodeScanner
 from src.agents.security.cve_scanner import CVEScanner
-from src.agents.security.models import SecurityReport, SecurityScanConfig, Vulnerability, CodeIssue
+from src.agents.security.models import CodeIssue, SecurityReport, SecurityScanConfig, Vulnerability
 from src.engine.base_agent import BaseAgent
 from src.utils.id_gen import generate_id
 from src.utils.logging import get_logger
@@ -183,7 +183,6 @@ class SecurityAuditAgent(BaseAgent):
         started = time.monotonic()
 
         dependencies = code_metadata.get("dependencies", [])
-        transitive_deps = code_metadata.get("transitive_deps", [])
 
         # CVE scan with local cache only (no OSV API)
         vulns = []

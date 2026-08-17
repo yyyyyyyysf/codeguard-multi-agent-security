@@ -1,7 +1,9 @@
 """Tests for ConflictResolutionAgent lifecycle and degradation."""
 
+from unittest.mock import MagicMock
+
 import pytest
-from unittest.mock import AsyncMock, MagicMock
+
 from src.agents.conflict.agent import ConflictResolutionAgent
 
 
@@ -224,7 +226,12 @@ class TestConflictAgentWithStores:
     async def test_uses_rule_store(self, agent_with_stores, mock_rule_store):
         """Agent loads rules from rule_store."""
         mock_rule_store.get_active_rules.return_value = [
-            {"rule_id": "r1", "rule_type": "cve_whitelist", "pattern": "CVE-2024-0001", "enabled": True},
+            {
+                "rule_id": "r1",
+                "rule_type": "cve_whitelist",
+                "pattern": "CVE-2024-0001",
+                "enabled": True,
+            },
         ]
         report = {
             "scan_id": "s1",
@@ -320,3 +327,28 @@ class TestConflictAgentWithStores:
         )
         assert result["success"]  # Decision still returned
         assert result["data"]["overall_blocking"]
+
+
+class TestPendingHumanItems:
+    def test_returns_pending_when_paused(self):
+        agent = ConflictResolutionAgent()
+        snapshot = MagicMock()
+        snapshot.next = ("human_review",)
+        snapshot.values = {"pending_human_items": ["CVE-1", "CVE-2"]}
+        agent._graph.get_state = MagicMock(return_value=snapshot)
+
+        assert agent.get_pending_human_items("t1", "s1") == ["CVE-1", "CVE-2"]
+
+    def test_returns_empty_when_not_paused(self):
+        agent = ConflictResolutionAgent()
+        snapshot = MagicMock()
+        snapshot.next = ()
+        agent._graph.get_state = MagicMock(return_value=snapshot)
+
+        assert agent.get_pending_human_items("t1", "s1") == []
+
+    def test_returns_empty_on_state_error(self):
+        agent = ConflictResolutionAgent()
+        agent._graph.get_state = MagicMock(side_effect=RuntimeError("no thread"))
+
+        assert agent.get_pending_human_items("t1", "s1") == []

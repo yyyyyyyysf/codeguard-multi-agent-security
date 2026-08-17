@@ -20,8 +20,6 @@ import os
 from typing import Any
 
 from src.core.constants import LLM_API_TIMEOUT
-from src.core.errors import LLMTimeoutError
-from src.storage.changelog_store import ChangelogStore
 
 
 class LLMAnalyzer:
@@ -84,7 +82,7 @@ class LLMAnalyzer:
         try:
             response = await self._call_llm(prompt)
             return self._parse_response(response, breaking_changes)
-        except (LLMTimeoutError, Exception):
+        except Exception:
             return []  # Degrade gracefully: no LLM results
 
     # ------------------------------------------------------------------
@@ -124,6 +122,7 @@ class LLMAnalyzer:
                     f"### {f.get('path', '')}\n```\n{content}\n```"
                 )
 
+        # Keep prompt first line intact (template content, not code) — line length is deliberate.
         prompt = f"""You are analyzing code for a {framework} upgrade from {from_version} to {to_version}.
 
 ## Known Breaking Changes
@@ -157,38 +156,15 @@ Return JSON:
 
     async def _call_llm(self, prompt: str) -> str:
         """Call the LLM API with timeout and error handling."""
-        import httpx
+        from src.integrations.llm_client import LLMClient
 
-        headers = {
-            "Authorization": f"Bearer {self._api_key}",
-            "Content-Type": "application/json",
-        }
-
-        payload = {
-            "model": self._model,
-            "messages": [{"role": "user", "content": prompt}],
-            "temperature": 0.1,  # Low temp for deterministic analysis
-            "max_tokens": 4096,
-            "stream": False,
-        }
-
-        try:
-            async with httpx.AsyncClient(timeout=httpx.Timeout(self._timeout)) as client:
-                response = await client.post(
-                    f"{self._base_url}/v1/chat/completions",
-                    headers=headers,
-                    json=payload,
-                )
-                response.raise_for_status()
-                data = response.json()
-                return data["choices"][0]["message"]["content"]
-        except httpx.TimeoutException as e:
-            raise LLMTimeoutError(
-                f"LLM analysis timed out after {self._timeout}s",
-                retryable=True,
-            ) from e
-        except httpx.HTTPStatusError as e:
-            raise Exception(f"LLM API error {e.response.status_code}") from e
+        client = LLMClient(
+            api_key=self._api_key,
+            model=self._model,
+            base_url=self._base_url,
+            timeout=self._timeout,
+        )
+        return await client.complete(prompt)
 
     # ------------------------------------------------------------------
     # Response parsing

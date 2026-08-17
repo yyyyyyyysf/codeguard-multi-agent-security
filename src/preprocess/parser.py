@@ -14,7 +14,6 @@ Tree-sitter grammar packages are loaded from pip-installed packages:
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 from typing import Any
 

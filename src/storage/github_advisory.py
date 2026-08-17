@@ -40,7 +40,7 @@ class GitHubAdvisoryClient:
         if self.token:
             self._headers["Authorization"] = f"Bearer {self.token}"
 
-    async def __aenter__(self) -> "GitHubAdvisoryClient":
+    async def __aenter__(self) -> GitHubAdvisoryClient:
         self._client = httpx.AsyncClient(
             base_url="https://api.github.com",
             headers=self._headers,

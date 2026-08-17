@@ -12,8 +12,6 @@ from __future__ import annotations
 import os
 import signal
 import subprocess
-import sys
-from typing import Any
 
 from src.core.constants import SANDBOX_MAX_MEMORY_MB, SANDBOX_TIMEOUT_SECONDS
 from src.core.errors import CodeGuardError

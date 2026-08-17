@@ -65,6 +65,8 @@ async def submit_analysis(
             kwargs=celery_kwargs,
             queue="codeguard",
         )
+        from src.monitoring.metrics import get_metrics
+        get_metrics().inc("api_analyze_submit_total", tags={"scan_type": body.scan_type})
         logger.info("api_analysis_dispatched", task_id=task_id, celery_id=result.id)
     except ImportError as exc:
         logger.warning("celery_not_available", error=str(exc))
@@ -72,7 +74,6 @@ async def submit_analysis(
         # a Celery worker is connected, but the API stays responsive.
         redis = getattr(request.app.state, "redis", None)
         if redis:
-            import json
             await redis.setex(
                 f"codeguard:task:{task_id}:status", 3600, "pending"
             )
@@ -117,7 +118,9 @@ async def get_task(
             p = await redis.get(f"codeguard:task:{task_id}:progress")
             if p:
                 stage = p.decode() if isinstance(p, bytes) else p
-                stage_map = {"preprocess": 20, "security": 50, "conflict": 70, "migration": 85, "report": 95}
+                stage_map = {
+                    "preprocess": 20, "security": 50, "conflict": 70, "migration": 85, "report": 95
+                }
                 progress = stage_map.get(stage, 10)
 
         return {

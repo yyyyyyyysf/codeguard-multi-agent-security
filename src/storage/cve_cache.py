@@ -13,16 +13,14 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
-import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from src.core.constants import (
     CVE_HOT_CACHE_SIZE,
-    CVE_LOCAL_SYNC_INTERVAL_HOURS,
     CVE_STALENESS_WARNING_HOURS,
 )
-from src.core.models import Ecosystem, Severity
+from src.core.models import Ecosystem
 from src.storage.osv_client import OSVClient
 from src.utils.logging import get_logger
 
@@ -149,7 +147,7 @@ class CVECache:
         try:
             await self._redis.setex(key, ttl, json.dumps(data))
         except Exception as e:
-            logger.warning("cve_cache_redis_get_failed", key=key[:50], error=str(e)[:100])
+            logger.warning("cve_cache_redis_set_failed", key=key[:50], error=str(e)[:100])
             pass  # Redis failure is non-fatal
 
     # ------------------------------------------------------------------
@@ -214,7 +212,7 @@ class CVECache:
         try:
             updated_dt = datetime.fromisoformat(latest_update)
             age_hours = (
-                datetime.now(timezone.utc) - updated_dt.replace(tzinfo=timezone.utc)
+                datetime.now(UTC) - updated_dt.replace(tzinfo=UTC)
             ).total_seconds() / 3600
         except (ValueError, TypeError):
             age_hours = 0
@@ -234,7 +232,7 @@ class CVECache:
     ) -> None:
         """Insert or update multiple vulnerability records."""
         conn = self._get_conn()
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
 
         for vuln in vulns:
             conn.execute(
@@ -286,8 +284,19 @@ class CVECache:
             async with OSVClient() as client:
                 raw_vulns = await client.query_vulns(package_name, version, ecosystem)
         except Exception as e:
-            logger.warning("osv_fetch_failed", package=package_name, version=version, error=str(e)[:100])
+            logger.warning(
+                "osv_fetch_failed", package=package_name, version=version, error=str(e)[:100]
+            )
             return None  # Degradation: OSV unavailable
+
+        # Fallback: if OSV has no record for this package/version and a
+        # GitHub Advisory token is configured, try the advisory database.
+        if not raw_vulns:
+            github_advisory_vulns = await self._fetch_from_github_advisory(
+                package_name, ecosystem
+            )
+            if github_advisory_vulns:
+                return github_advisory_vulns
 
         normalized = []
         for v in raw_vulns:
@@ -304,6 +313,47 @@ class CVECache:
                 "summary": v.get("summary", ""),
                 "evidence_source": "OSV",
                 "evidence_url": v.get("references", [None])[0] if v.get("references") else "",
+            })
+
+        return normalized
+
+    async def _fetch_from_github_advisory(
+        self,
+        package_name: str,
+        ecosystem: Ecosystem,
+    ) -> list[dict[str, Any]]:
+        """Best-effort fallback to GitHub Advisory Database."""
+        import os
+
+        if not os.getenv("GITHUB_ADVISORY_TOKEN", ""):
+            return []
+        try:
+            from src.storage.github_advisory import GitHubAdvisoryClient
+
+            async with GitHubAdvisoryClient() as client:
+                advisories = await client.query_advisories(package_name, ecosystem)
+        except Exception as e:
+            logger.warning(
+                "github_advisory_fetch_failed",
+                package=package_name,
+                error=str(e)[:100],
+            )
+            return []
+
+        normalized = []
+        for v in advisories:
+            normalized.append({
+                "cve_id": v.get("cve_id") or v.get("ghsa_id", ""),
+                "package_name": package_name,
+                "version": "",
+                "severity": v.get("severity") or "unknown",
+                "cvss_score": v.get("cvss_score"),
+                "fixed_version": v.get("fixed_version"),
+                "summary": v.get("summary", ""),
+                "evidence_source": "GitHub Advisory",
+                "evidence_url": (v.get("references") or [None])[0]
+                if v.get("references")
+                else "",
             })
 
         return normalized
