@@ -15,9 +15,7 @@ Design invariants:
 
 from __future__ import annotations
 
-import os
-import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any, Literal
 
 from langgraph.checkpoint.memory import MemorySaver
@@ -29,7 +27,6 @@ from src.agents.conflict.models import (
     AuditEntry,
     AuditTrail,
     FinalSecurityDecision,
-    ResolutionConfig,
     SecurityVerdict,
 )
 from src.core.models import Verdict
@@ -42,24 +39,17 @@ from src.utils.logging import get_logger
 logger = get_logger(__name__)
 
 def _build_checkpointer() -> MemorySaver:
-    """Return a checkpointer for the conflict resolution graph.
+    """Return the checkpointer for the conflict resolution graph.
 
-    Currently uses MemorySaver. For production, use ``SqliteSaver`` from
-    the ``langgraph-checkpoint-sqlite`` package and set
-    ``CODEGUARD_CHECKPOINT_DB_PATH=data/checkpoint.db``.
+    Uses an in-process MemorySaver by default. True cross-process persistence
+    requires AsyncSqliteSaver (async-native) — see the note inside the body.
     """
-    db_path = os.getenv("CODEGUARD_CHECKPOINT_DB_PATH", "")
-    if db_path:
-        try:
-            from langgraph.checkpoint.sqlite import SqliteSaver
-            return SqliteSaver.from_conn_string(db_path)  # type: ignore[return-value]
-        except ImportError:
-            logger.warning(
-                "checkpointer_sqlite_not_installed",
-                hint="pip install langgraph-checkpoint-sqlite",
-            )
-        except Exception as exc:
-            logger.warning("checkpointer_sqlite_failed", path=db_path, error=str(exc)[:200])
+    # NOTE: the only persistent checkpointer compatible with this async graph's ainvoke
+    # is langgraph.checkpoint.sqlite.aio.AsyncSqliteSaver. A synchronous SqliteSaver
+    # does not support async methods, so building it here would fail at runtime.
+    # See session notes for the full AsyncSqliteSaver integration that requires an
+    # async construction path. Until then we fall back to MemorySaver (usable, but
+    # not persisted across processes).
     return MemorySaver()
 
 class ConflictState(TypedDict, total=False):
@@ -257,7 +247,9 @@ class ConflictResolutionAgent(BaseAgent):
             fid = v.get("finding_id") or v.get("cve_id") or v.get("rule_id", "")
             decisions.append(SecurityVerdict(
                 finding_id=fid,
-                finding_type="vulnerability" if "cve_id" in v or "dependency_type" in v else "code_issue",
+                finding_type=(
+                    "vulnerability" if "cve_id" in v or "dependency_type" in v else "code_issue"
+                ),
                 verdict=v.get("verdict", "block"),
                 reason=v.get("reason", ""),
                 rule_id=v.get("rule_id"),
@@ -267,7 +259,7 @@ class ConflictResolutionAgent(BaseAgent):
             ))
 
         overall_blocking = any(d.verdict == Verdict.BLOCK.value for d in decisions)
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
 
         # Audit trail
         audit = AuditTrail()
@@ -287,7 +279,9 @@ class ConflictResolutionAgent(BaseAgent):
                     self._audit_logger.log(
                         action="verdict_made",
                         operator=d.operator or "auto",
-                        detail={"finding_id": d.finding_id, "verdict": d.verdict, "reason": d.reason},
+                        detail={
+                            "finding_id": d.finding_id, "verdict": d.verdict, "reason": d.reason
+                        },
                         evidence_link=d.evidence_link,
                         scan_id=scan_id,
                         task_id=task_id,
@@ -360,7 +354,26 @@ class ConflictResolutionAgent(BaseAgent):
         config = {"configurable": {"thread_id": thread_id}}
 
         result = await self._graph.ainvoke(initial_state, config)
-        return result.get("final_decision") or {}
+        final = result.get("final_decision")
+        if final:
+            return final
+
+        # The graph paused at human_review before a decision was produced.
+        # Return a fail-safe decision that BLOCKS until a human adjudicates.
+        # Never silently default to allow (violates the project fail-safe guarantee).
+        pending = result.get("pending_human_items") or []
+        return {
+            "scan_id": scan_id,
+            "overall_blocking": True,
+            "decisions": [],
+            "audit_trail": {"entries": []},
+            "executed_at": datetime.now(UTC).isoformat(),
+            "executed_by": "system:paused_for_human_review",
+            "human_intervention_required": True,
+            "pending_human_items": pending,
+            "appeal_count": 0,
+            "paused_for_human_review": True,
+        }
 
     async def resume_with_human_input(
         self,
@@ -381,14 +394,45 @@ class ConflictResolutionAgent(BaseAgent):
         thread_id = f"conflict:{task_id}:{scan_id}"
         config = {"configurable": {"thread_id": thread_id}}
 
-        update: dict[str, Any] = {"human_input": human_decisions}
-
         try:
-            result = await self._graph.ainvoke(update, config)
+            # Inject the human decisions into the saved checkpoint, then resume from
+            # the interrupt point. Passing input directly to ainvoke() would re-run
+            # the already-executed nodes; update_state() + ainvoke(None) continues
+            # from the human_review interrupt without replaying auto_resolve.
+            self._graph.update_state(config, {"human_input": human_decisions})
+            result = await self._graph.ainvoke(None, config)
             return result.get("final_decision") or {}
         except Exception as e:
             logger.error("conflict_resume_failed", error=str(e)[:200])
             raise
+
+    def get_pending_human_items(
+        self,
+        task_id: str,
+        scan_id: str,
+    ) -> list[str]:
+        """Return the finding IDs waiting for human review, or [] if not paused.
+
+        Reads the LangGraph checkpoint for the given thread. If the graph
+        is not paused at the ``human_review`` interrupt (e.g. checkpointer
+        lost or already resolved), returns an empty list so callers can
+        fail safely instead of silently re-running the graph.
+        """
+        thread_id = f"conflict:{task_id}:{scan_id}"
+        config = {"configurable": {"thread_id": thread_id}}
+        try:
+            snapshot = self._graph.get_state(config)
+        except Exception as exc:
+            logger.warning(
+                "conflict_state_lookup_failed",
+                task_id=task_id,
+                error=str(exc)[:200],
+            )
+            return []
+
+        if snapshot is None or "human_review" not in (snapshot.next or ()):
+            return []
+        return list(snapshot.values.get("pending_human_items", []))
 
     # ------------------------------------------------------------------
     # Degradation
@@ -400,7 +444,7 @@ class ConflictResolutionAgent(BaseAgent):
         """Fallback: block all findings (safety-first)."""
         security_report = kwargs.get("security_report", {})
         scan_id = kwargs.get("scan_id", generate_id())
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
 
         vulns = security_report.get("vulnerabilities", [])
         issues = security_report.get("code_issues", [])
@@ -411,7 +455,7 @@ class ConflictResolutionAgent(BaseAgent):
                 finding_id=v.get("cve_id", ""),
                 finding_type="vulnerability",
                 verdict="block",
-                reason=f"Resolver degraded — defaulting to block",
+                reason="Resolver degraded — defaulting to block",
                 operator="system:degraded",
                 appealable=True,
             ))
@@ -420,7 +464,7 @@ class ConflictResolutionAgent(BaseAgent):
                 finding_id=iss.get("rule_id", ""),
                 finding_type="code_issue",
                 verdict="block",
-                reason=f"Resolver degraded — defaulting to block",
+                reason="Resolver degraded — defaulting to block",
                 operator="system:degraded",
                 appealable=True,
             ))

@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from src.core.constants import CRITICAL_CVSS_THRESHOLD, HIGH_CVSS_THRESHOLD
+from src.core.constants import CRITICAL_CVSS_THRESHOLD
 from src.core.models import Severity, Verdict
 
 
@@ -96,6 +96,27 @@ class AutoResolver:
 
         return resolved, unresolved
 
+    @staticmethod
+    def _findings_needs_human(finding: dict[str, Any]) -> str | None:
+        # Return a reason when a finding lacks the data needed for a reliable
+        # auto-verdict. Such edge cases go to human review (returning None from
+        # _resolve_* routes them to unresolved -> human_review) instead of being
+        # decided from incomplete or ambiguous data.
+        severity_str = finding.get("severity", "medium")
+        try:
+            Severity(severity_str)
+        except ValueError:
+            return f"unparsable severity: {severity_str!r}"
+        # cvss_score only exists for vulnerabilities; never gate code issues on it.
+        if "cve_id" in finding:
+            cvss = finding.get("cvss_score")
+            if cvss is None and severity_str in ("critical", "high"):
+                return "high/critical severity without a cvss_score"
+        conf = finding.get("confidence")
+        if conf is not None and conf not in ("low", "medium", "high"):
+            return f"unparsable confidence: {conf!r}"
+        return None
+
     # ------------------------------------------------------------------
     # Per-finding resolution
     # ------------------------------------------------------------------
@@ -120,6 +141,12 @@ class AutoResolver:
             severity = Severity.MEDIUM
 
         cvss = vuln.get("cvss_score")
+
+        # Edge case: if the finding lacks enough data to auto-decide reliably,
+        # route it to human review instead of guessing a verdict from bad data.
+        insufficient = self._findings_needs_human(vuln)
+        if insufficient:
+            return None  # -> unresolved -> human_review
 
         # Rule 1: CVE whitelist
         if cve_id in self._cve_whitelist:
@@ -191,6 +218,11 @@ class AutoResolver:
         severity_str = issue.get("severity", "medium")
         rule_id = issue.get("rule_id", "")
 
+        # Edge case: route to human review when the field data is invalid/ambiguous.
+        insufficient = self._findings_needs_human(issue)
+        if insufficient:
+            return None  # -> unresolved -> human_review
+
         # Rule 2: Path whitelist
         for pattern in self._path_whitelist:
             if self._match_path(file_path, pattern):
@@ -213,7 +245,7 @@ class AutoResolver:
         if confidence == "low" and auto_waive:
             return self._make_verdict(
                 issue, Verdict.WAIVE,
-                reason=f"Low confidence finding — waived automatically",
+                reason="Low confidence finding — waived automatically",
                 rule_id="auto:low_confidence_waive",
             )
 
@@ -228,7 +260,7 @@ class AutoResolver:
         # Medium confidence — let through as warning
         return self._make_verdict(
             issue, Verdict.WAIVE,
-            reason=f"Medium confidence — waived, review recommended",
+            reason="Medium confidence — waived, review recommended",
             rule_id="auto:medium_confidence_waive",
         )
 

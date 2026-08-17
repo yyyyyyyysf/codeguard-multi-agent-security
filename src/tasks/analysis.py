@@ -15,14 +15,14 @@ import json
 import os
 from typing import Any
 
-from celery import group, chain
-from celery.utils.log import get_task_logger
+from celery import chain, group
 
 from src.core.models import ScanScope
 from src.tasks.celery_app import BaseCodeGuardTask, app
 from src.utils.id_gen import generate_task_id
+from src.utils.logging import get_logger
 
-logger = get_task_logger(__name__)
+logger = get_logger(__name__)
 
 # Module-level redis import (mocked in tests)
 try:
@@ -144,6 +144,11 @@ def preprocess_task(
 
         # Cache metadata in Redis
         _sync_cache_json(f"codeguard:task:{task_id}:metadata", metadata, ttl=86400)
+        _sync_publish(
+            "code_metadata.ready",
+            task_id=task_id,
+            payload={"language": metadata.get("language", "unknown")},
+        )
 
         return {
             "task_id": task_id,
@@ -219,7 +224,22 @@ def security_chain_task(
             "conflict": conflict_result.get("data", {}),
         }
         _sync_cache_json(f"codeguard:task:{task_id}:security", security_data, ttl=86400)
-        _sync_set_status(task_id, "running:security_done")
+        conflict_data = conflict_result.get("data", {})
+        # Fail-safe: if the conflict graph paused for human review, surface that
+        # distinct state instead of claiming security is fully done.
+        if conflict_data.get("paused_for_human_review"):
+            _sync_set_status(task_id, "paused:human_review")
+        else:
+            _sync_set_status(task_id, "running:security_done")
+        _sync_publish(
+            "security.complete",
+            task_id=task_id,
+            payload={
+                "overall_blocking": conflict_result.get("data", {}).get(
+                    "overall_blocking", False
+                )
+            },
+        )
 
         return {
             "task_id": task_id,
@@ -285,6 +305,11 @@ def migration_task(
         migration_data = result.get("data", {})
         _sync_cache_json(f"codeguard:task:{task_id}:migration", migration_data, ttl=86400)
         _sync_set_status(task_id, "running:migration_done")
+        _sync_publish(
+            "migration.complete",
+            task_id=task_id,
+            payload={"framework": migration_data.get("framework", "")},
+        )
 
         return {"task_id": task_id, "status": "migration_done"}
 
@@ -319,8 +344,9 @@ def report_aggregation_task(
 
     try:
         from src.agents.reporter.agent import ReportAggregationAgent
+        from src.storage.report_store import LocalFileReportStorage
 
-        agent = ReportAggregationAgent()
+        agent = ReportAggregationAgent(report_store=LocalFileReportStorage())
         result = _sync_run_async(agent.execute(
             security_data=security_data,
             migration_data=migration_data,
@@ -333,6 +359,13 @@ def report_aggregation_task(
         report = result.get("data", {})
         _sync_cache_json(f"codeguard:task:{task_id}:result", report, ttl=86400)
         _sync_set_status(task_id, "completed")
+        _sync_publish(
+            "analysis.complete",
+            task_id=task_id,
+            payload={
+                "blocking_count": report.get("summary", {}).get("blocking_count", 0)
+            },
+        )
 
         # Cleanup working directory
         _cleanup_task_dir(task_id)
@@ -391,7 +424,7 @@ def webhook_callback_task(
     except Exception as exc:
         logger.error("callback_failed", task_id=task_id, error=str(exc)[:200])
         if self.request.retries < self.max_retries:
-            raise self.retry(exc=exc)
+            raise self.retry(exc=exc) from None
         return {"task_id": task_id, "status": "callback_exhausted"}
 
 
@@ -456,6 +489,49 @@ def _sync_load_json(key: str) -> dict[str, Any] | None:
         return None
 
 
+def _sync_publish(
+    channel: str,
+    *,
+    task_id: str,
+    scan_id: str = "",
+    payload: dict[str, Any] | None = None,
+) -> None:
+    """Publish a lifecycle event via the EventBus (best-effort).
+
+    Uses the in-process subscriber list; when Redis is reachable the
+    EventBus also publishes to the Redis Pub/Sub channel.
+    """
+    from src.engine.event_bus import EventBus
+
+    try:
+        redis_client = None
+        try:
+            import redis.asyncio as aioredis
+
+            redis_client = aioredis.from_url(
+                os.getenv("REDIS_URL", "redis://localhost:6379/0"),
+                decode_responses=True,
+            )
+        except Exception:
+            redis_client = None
+        bus = EventBus(redis_client)
+        _sync_run_async(
+            bus.publish(
+                channel,
+                task_id=task_id,
+                scan_id=scan_id or task_id,
+                payload=payload or {},
+            )
+        )
+    except Exception as exc:
+        logger.warning(
+            "event_publish_failed",
+            channel=channel,
+            task_id=task_id,
+            error=str(exc)[:100],
+        )
+
+
 def _sync_check_idempotent(task_id: str) -> bool:
     try:
         if _redis_module is None:
@@ -470,14 +546,15 @@ def _sync_run_async(coro):
     """Run an async coroutine from a sync Celery task context."""
     import asyncio
     try:
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            import nest_asyncio
-            nest_asyncio.apply()
-            return loop.run_until_complete(coro)
-        return loop.run_until_complete(coro)
+        loop = asyncio.get_running_loop()
     except RuntimeError:
-        return asyncio.run(coro)
+        loop = None
+
+    if loop is not None:
+        import nest_asyncio
+        nest_asyncio.apply()
+        return loop.run_until_complete(coro)
+    return asyncio.run(coro)
 
 
 def _cleanup_task_dir(task_id: str) -> None:
