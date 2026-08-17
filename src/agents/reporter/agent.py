@@ -15,11 +15,10 @@ Design invariants:
 
 from __future__ import annotations
 
-import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
-from jinja2 import Environment, BaseLoader, TemplateNotFound
+from jinja2 import BaseLoader, Environment
 
 from src.agents.reporter.models import AggregatedReport, ReportSummary
 from src.engine.base_agent import BaseAgent
@@ -55,7 +54,7 @@ PR_COMMENT_TEMPLATE = """## CodeGuard 安全分析报告
 {% if migration_warnings %}
 #### 迁移建议
 {% for item in migration_warnings %}
-- {{ item.change_desc }}：影响 `{{ item.location }}`
+- {{ item.change_desc }}：影响 {{ item.location }}
 {% endfor %}
 {% endif %}
 {% endif %}
@@ -86,9 +85,14 @@ class ReportAggregationAgent(BaseAgent):
         "reports via Jinja2 templates. NEVER modifies business conclusions."
     )
 
-    def __init__(self, template_dir: str | None = None) -> None:
+    def __init__(
+        self,
+        template_dir: str | None = None,
+        report_store: Any | None = None,
+    ) -> None:
         super().__init__()
         self._template_dir = template_dir or "src/agents/reporter/templates"
+        self._report_store = report_store
         self._jinja = Environment(
             loader=BaseLoader(),
             autoescape=False,
@@ -117,7 +121,6 @@ class ReportAggregationAgent(BaseAgent):
         code_metadata = kwargs.get("code_metadata", {})
         scan_id = kwargs.get("scan_id", generate_id())
         task_id = kwargs.get("task_id", "")
-        started = time.monotonic()
 
         conflict = security_data.get("conflict", {})
         security_report = security_data.get("security", {})
@@ -160,7 +163,7 @@ class ReportAggregationAgent(BaseAgent):
         pr_comment = self._render_pr_comment(pr_vars)
 
         # --- Step 4: Assemble report ---
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
 
         report = AggregatedReport(
             scan_id=scan_id,
@@ -189,7 +192,18 @@ class ReportAggregationAgent(BaseAgent):
             degraded=degraded,
         )
 
-        return report.model_dump()
+        report_dict = report.model_dump()
+        if self._report_store:
+            try:
+                self._report_store.save_json(scan_id, report_dict)
+            except Exception as exc:
+                logger.warning(
+                    "report_store_save_failed",
+                    scan_id=scan_id,
+                    error=str(exc)[:100],
+                )
+
+        return report_dict
 
     # ------------------------------------------------------------------
     # Degradation
@@ -206,7 +220,7 @@ class ReportAggregationAgent(BaseAgent):
         code_metadata = kwargs.get("code_metadata", {})
 
         blocking_count = self._count_blocking(conflict)
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
 
         # Plain-text fallback comment
         fallback = (
@@ -228,7 +242,18 @@ class ReportAggregationAgent(BaseAgent):
             degraded_reasons=[f"Reporter degraded: {str(original_error)[:200]}"],
         )
 
-        return report.model_dump()
+        report_dict = report.model_dump()
+        if self._report_store:
+            try:
+                self._report_store.save_json(scan_id, report_dict)
+            except Exception as exc:
+                logger.warning(
+                    "report_store_save_failed",
+                    scan_id=scan_id,
+                    error=str(exc)[:100],
+                )
+
+        return report_dict
 
     # ------------------------------------------------------------------
     # Template rendering
@@ -257,6 +282,20 @@ class ReportAggregationAgent(BaseAgent):
             logger.error("html_report_render_failed", error=str(e))
             return f"<html><body><h1>Report Error</h1><p>{e}</p></body></html>"
 
+    @staticmethod
+    def _md_safe(value: object) -> str:
+        # Render untrusted external text as a Markdown inline-code span.
+        # Injected link syntax ([Click](http://evil.com)) would render as a
+        # clickable link under Markdown; HTML autoescape does not help here.
+        # Wrapping in a code span makes it literal text. Existing backticks
+        # widen the delimiter; a pipe '|' becomes full-width so it cannot
+        # inject extra columns into the Markdown table.
+        text = str(value or "")
+        text = text.replace('|', '\uff5c')
+        if '`' in text:
+            return '``' + text + '``'
+        return '`' + text + '`'
+
     # ------------------------------------------------------------------
     # Template variables
     # ------------------------------------------------------------------
@@ -280,11 +319,11 @@ class ReportAggregationAgent(BaseAgent):
             if d.get("verdict") == "block":
                 blocking_items.append({
                     "severity": "Critical",
-                    "id": d.get("finding_id", ""),
-                    "description": d.get("reason", "")[:120],
-                    "source": self._get_evidence_source(d, security_report),
-                    "location": self._get_location(d, security_report),
-                    "fix": self._get_fix_suggestion(d, security_report),
+                    "id": self._md_safe(d.get("finding_id", "")),
+                    "description": self._md_safe(d.get("reason", "")[:120]),
+                    "source": self._md_safe(self._get_evidence_source(d, security_report)),
+                    "location": self._md_safe(self._get_location(d, security_report)),
+                    "fix": self._md_safe(self._get_fix_suggestion(d, security_report)),
                     "appealable": d.get("appealable", False),
                 })
 
@@ -293,15 +332,19 @@ class ReportAggregationAgent(BaseAgent):
         for d in conflict.get("decisions", []):
             if d.get("verdict") != "block":
                 security_warnings.append({
-                    "message": f"{d.get('finding_id')}: {d.get('reason', '')[:150]}",
+                    "message": self._md_safe(
+                        f"{d.get('finding_id')}: {d.get('reason', '')[:150]}"
+                    ),
                 })
 
         migration_warnings = []
         for bc in migration.get("breaking_changes", []):
             for af in bc.get("affected_files", []):
                 migration_warnings.append({
-                    "change_desc": bc.get("change_desc", ""),
-                    "location": f"{af.get('path', '')}:L{af.get('line_number', 0)}",
+                    "change_desc": self._md_safe(bc.get("change_desc", "")),
+                    "location": self._md_safe(
+                        f"{af.get('path', '')}:L{af.get('line_number', 0)}"
+                    ),
                 })
 
         # Pass items
