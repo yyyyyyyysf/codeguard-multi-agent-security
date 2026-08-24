@@ -15,6 +15,7 @@ Design invariants:
 
 from __future__ import annotations
 
+import os
 from datetime import UTC, datetime
 from typing import Any, Literal
 
@@ -37,20 +38,6 @@ from src.utils.id_gen import generate_id
 from src.utils.logging import get_logger
 
 logger = get_logger(__name__)
-
-def _build_checkpointer() -> MemorySaver:
-    """Return the checkpointer for the conflict resolution graph.
-
-    Uses an in-process MemorySaver by default. True cross-process persistence
-    requires AsyncSqliteSaver (async-native) — see the note inside the body.
-    """
-    # NOTE: the only persistent checkpointer compatible with this async graph's ainvoke
-    # is langgraph.checkpoint.sqlite.aio.AsyncSqliteSaver. A synchronous SqliteSaver
-    # does not support async methods, so building it here would fail at runtime.
-    # See session notes for the full AsyncSqliteSaver integration that requires an
-    # async construction path. Until then we fall back to MemorySaver (usable, but
-    # not persisted across processes).
-    return MemorySaver()
 
 class ConflictState(TypedDict, total=False):
     """State carried through the security DAG."""
@@ -105,19 +92,49 @@ class ConflictResolutionAgent(BaseAgent):
         self._rule_store = rule_store
         self._audit_logger = audit_logger
         self._default_timeout = human_loop_timeout_hours
-        self._graph = self._build_graph()
+        # The graph is built lazily in _ensure_graph() (async) so the checkpointer
+        # can be AsyncSqliteSaver (persistent, cross-process) when CODEGUARD_CHECKPOINT_DB_PATH
+        # is set, or MemorySaver (in-process) otherwise. A synchronous build cannot
+        # construct an async saver, and tests rely on MemorySaver isolation.
+        self._graph = None
+        self._checkpoint_db = os.getenv("CODEGUARD_CHECKPOINT_DB_PATH", "")
+
+    async def _ensure_graph(self) -> None:
+        """Lazily build the compiled graph, choosing the checkpointer.
+
+        When CODEGUARD_CHECKPOINT_DB_PATH is set, use AsyncSqliteSaver so a paused
+        graph survives across processes (cross-process human-in-the-loop resume).
+        Otherwise fall back to an in-process MemorySaver (tests / no persistence).
+        """
+        if self._graph is not None:
+            return
+        db_path = self._checkpoint_db
+        if not db_path:
+            checkpointer = MemorySaver()
+        else:
+            import aiosqlite
+            from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
+            db_dir = os.path.dirname(db_path) or "."
+            os.makedirs(db_dir, exist_ok=True)
+            conn = await aiosqlite.connect(db_path)
+            self._ckpt_conn = conn  # hold the connection for agent lifetime
+            checkpointer = AsyncSqliteSaver(conn)
+        self._graph = self._build_graph(checkpointer)
 
     # ------------------------------------------------------------------
     # Graph construction
     # ------------------------------------------------------------------
 
-    def _build_graph(self):
+    def _build_graph(self, checkpointer: Any) -> Any:
         """Build the LangGraph StateGraph for security conflict resolution.
 
         Nodes:
             auto_resolve  — Run 5-rule engine, split resolved/unresolved.
             human_review  — INTERRUPT point: wait for human input.
             finalize      — Assemble FinalSecurityDecision + audit log.
+
+        The checkpointer is provided by _ensure_graph() (async-gated) so we can
+        use AsyncSqliteSaver for cross-process persistence when configured.
         """
         graph = StateGraph(ConflictState)
 
@@ -140,7 +157,7 @@ class ConflictResolutionAgent(BaseAgent):
         graph.add_edge("finalize", END)
 
         return graph.compile(
-            checkpointer=_build_checkpointer(),
+            checkpointer=checkpointer,
             interrupt_before=["human_review"],  # ← Pause here for human input
         )
 
@@ -352,6 +369,7 @@ class ConflictResolutionAgent(BaseAgent):
         # Run the graph (pauses at human_review if needed)
         thread_id = f"conflict:{task_id}:{scan_id}"
         config = {"configurable": {"thread_id": thread_id}}
+        await self._ensure_graph()
 
         result = await self._graph.ainvoke(initial_state, config)
         final = result.get("final_decision")
@@ -394,6 +412,7 @@ class ConflictResolutionAgent(BaseAgent):
         thread_id = f"conflict:{task_id}:{scan_id}"
         config = {"configurable": {"thread_id": thread_id}}
 
+        await self._ensure_graph()
         try:
             # Inject the human decisions into the saved checkpoint, then resume from
             # the interrupt point. Passing input directly to ainvoke() would re-run
@@ -406,7 +425,7 @@ class ConflictResolutionAgent(BaseAgent):
             logger.error("conflict_resume_failed", error=str(e)[:200])
             raise
 
-    def get_pending_human_items(
+    async def get_pending_human_items(
         self,
         task_id: str,
         scan_id: str,
@@ -418,10 +437,11 @@ class ConflictResolutionAgent(BaseAgent):
         lost or already resolved), returns an empty list so callers can
         fail safely instead of silently re-running the graph.
         """
+        await self._ensure_graph()
         thread_id = f"conflict:{task_id}:{scan_id}"
         config = {"configurable": {"thread_id": thread_id}}
         try:
-            snapshot = self._graph.get_state(config)
+            snapshot = await self._graph.aget_state(config)
         except Exception as exc:
             logger.warning(
                 "conflict_state_lookup_failed",

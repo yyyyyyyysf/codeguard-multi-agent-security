@@ -63,3 +63,6 @@ docker-compose.override.yml
 *.log
 logs/
 MagicMock
+
+# WorkBuddy project data
+.workbuddy/

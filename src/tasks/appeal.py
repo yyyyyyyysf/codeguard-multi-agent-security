@@ -58,7 +58,8 @@ def appeal_resume_task(
     )
 
     # 1. Verify the graph is actually paused at the human-review node.
-    pending = agent.get_pending_human_items(task_id, scan_id)
+    # get_pending_human_items is async (may read an AsyncSqliteSaver checkpoint).
+    pending = _run_async(agent.get_pending_human_items(task_id, scan_id))
     if not pending:
         _mark_appeal_status(
             appeal_id,

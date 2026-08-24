@@ -1,6 +1,6 @@
 """Tests for ConflictResolutionAgent lifecycle and degradation."""
 
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -330,25 +330,34 @@ class TestConflictAgentWithStores:
 
 
 class TestPendingHumanItems:
-    def test_returns_pending_when_paused(self):
+    @pytest.mark.asyncio
+    async def test_returns_pending_when_paused(self):
         agent = ConflictResolutionAgent()
+        await agent._ensure_graph()
         snapshot = MagicMock()
         snapshot.next = ("human_review",)
         snapshot.values = {"pending_human_items": ["CVE-1", "CVE-2"]}
-        agent._graph.get_state = MagicMock(return_value=snapshot)
+        agent._graph.aget_state = AsyncMock(return_value=snapshot)
 
-        assert agent.get_pending_human_items("t1", "s1") == ["CVE-1", "CVE-2"]
+        result = await agent.get_pending_human_items("t1", "s1")
+        assert result == ["CVE-1", "CVE-2"]
 
-    def test_returns_empty_when_not_paused(self):
+    @pytest.mark.asyncio
+    async def test_returns_empty_when_not_paused(self):
         agent = ConflictResolutionAgent()
+        await agent._ensure_graph()
         snapshot = MagicMock()
         snapshot.next = ()
-        agent._graph.get_state = MagicMock(return_value=snapshot)
+        agent._graph.aget_state = AsyncMock(return_value=snapshot)
 
-        assert agent.get_pending_human_items("t1", "s1") == []
+        result = await agent.get_pending_human_items("t1", "s1")
+        assert result == []
 
-    def test_returns_empty_on_state_error(self):
+    @pytest.mark.asyncio
+    async def test_returns_empty_on_state_error(self):
         agent = ConflictResolutionAgent()
-        agent._graph.get_state = MagicMock(side_effect=RuntimeError("no thread"))
+        await agent._ensure_graph()
+        agent._graph.aget_state = AsyncMock(side_effect=RuntimeError("no thread"))
 
-        assert agent.get_pending_human_items("t1", "s1") == []
+        result = await agent.get_pending_human_items("t1", "s1")
+        assert result == []

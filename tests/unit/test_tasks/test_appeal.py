@@ -16,7 +16,11 @@ class TestAppealResumeTask:
 
     def _mock_agent(self, pending, final_decision):
         mock_agent = MagicMock()
-        mock_agent.get_pending_human_items.return_value = pending
+
+        async def fake_get_pending(*args, **kwargs):
+            return pending
+
+        mock_agent.get_pending_human_items.side_effect = fake_get_pending
 
         async def fake_resume(**kwargs):
             return final_decision
