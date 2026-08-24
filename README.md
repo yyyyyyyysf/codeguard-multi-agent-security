@@ -6,6 +6,7 @@
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.110+-green.svg)](https://fastapi.tiangolo.com/)
 [![LangGraph](https://img.shields.io/badge/LangGraph-0.2+-orange.svg)](https://langchain-ai.github.io/langgraph/)
 [![Tests](https://img.shields.io/badge/tests-268%20passed-brightgreen.svg)]()
+[![GitHub](https://img.shields.io/badge/GitHub-Repo-181717?logo=github&logoColor=white)](https://github.com/yyyyyyyysf/codeguard-multi-agent-security)
 
 CodeGuard embeds automated security analysis into your CI/CD pipeline — blocking vulnerabilities at the PR level before they reach production.
 
@@ -91,7 +92,7 @@ flowchart TB
 
 ```bash
 # Clone and setup
-git clone https://github.com/your/codeguard
+git clone https://github.com/yyyyyyyysf/codeguard-multi-agent-security.git
 cd codeguard
 cp .env.example .env
 # REQUIRED: edit .env and set CODEGUARD_API_KEY, GITHUB_WEBHOOK_SECRET
