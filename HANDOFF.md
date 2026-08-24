@@ -22,7 +22,7 @@
 
 ## 二、已经完成了什么
 
-### 整体进度：14 个模块全部开发完成，239 个测试通过
+### 整体进度：14 个模块全部开发完成，268 个测试通过
 
 | 阶段 | 模块 | 状态 | 说明 |
 |------|------|:----:|------|
@@ -37,7 +37,7 @@
 | Phase 5.5 | Celery 任务层 | ✅ | 14 tests, 6 类核心任务, 全链路编排 |
 | Phase 6 | CLI + 集成测试 + README | ✅ | Typer CLI, 4 integration tests, 项目首页 |
 
-### 测试总计：239 tests collected，Agent 层平均覆盖率 87%
+### 测试总计：268 tests collected（实测 pytest 全量），Agent 层平均覆盖率 87%
 
 ```
 Security Agent:  40 tests, 89%
@@ -49,8 +49,9 @@ API + Webhook:   40 tests
 Tasks:           14 tests
 Integration:      4 tests
 ─────────────────────────
-Total:          239 tests
+Total:          268 tests
 ```
+> 注：上表仅列核心模块明细，其余测试来自 storage/preprocess/engine/webhook/monitoring 等模块，全量实测 268 tests（2026-08-24 pytest 全量跑通）。
 
 ### Git 历史：18 commits，线性历史，规范化提交
 

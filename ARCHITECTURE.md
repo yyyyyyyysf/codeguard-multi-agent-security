@@ -226,6 +226,7 @@ src/
 |------|------|--------|
 | `PROJECT_RULES.md` | 唯一权威开发规范 | **开发前必读** |
 | `docs/specs/codeguard-v0.1-design-spec.md` | 完整设计规格 | 查阅具体设计细节时 |
+| `docs/architecture-overview.md` | 架构图解（Mermaid 全景图 + 通俗解释） | 快速理解系统全貌 / 给非技术同学讲解时 |
 | `docs/adr/*.md` | 架构决策记录 | 理解技术选型背景时 |
 | `docs/guides/setup-guide.md` | 环境搭建指南 | 首次搭建项目时 |
 | `DEVELOPMENT_LOG.md` | 开发日志 | 了解当前进度和历史改动 |
@@ -253,7 +254,7 @@ src/
 | Module 14: CLI | ⬜ | - | - |
 | **Module 14: CLI** | ✅ | manual | - |
 | **Module 15-18: 集成测试** | ✅ | 4/4 ✅ | - |
-| 🎉 **项目完成** | | **238 tests** | |
+| 🎉 **项目完成** | | **268 tests** | |
 
 ---
 

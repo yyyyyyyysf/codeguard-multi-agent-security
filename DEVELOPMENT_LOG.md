@@ -215,7 +215,7 @@
 | 指标 | 数值 |
 |------|------|
 | 总模块数 | 14 |
-| 总测试数 | **238 passed** |
+| 总测试数 | **268 passed** |
 | Agent 覆盖率 (avg) | **87%** |
 | Python 代码行数 | ~6,000+ |
 | Git 提交数 | 14 |
@@ -244,3 +244,17 @@
 ---
 
 > **最后更新**: 2026-08-03
+
+---
+
+## 2026-08-24 — 文档：架构图解同步
+
+- **类型**: 文档
+- **内容**:
+  - 创建 `docs/architecture-overview.md`：面向非技术读者的架构图解（Mermaid 全景图 + 逐层通俗解释 + 三个关键设计 + 图↔代码目录对照表）
+  - `docs/specs/codeguard-v0.1-design-spec.md`：新增 §1.2「架构图解（Mermaid 全景图）」，原 1.2/1.3 顺延为 1.3/1.4；图与 architecture-overview.md 保持一致并注明同步约定
+  - `README.md`：Architecture 章节在原有 ASCII 图后追加 Mermaid 全景图，并链接 architecture-overview.md
+  - `ARCHITECTURE.md`：第七章文档索引登记 `docs/architecture-overview.md`
+- **同步约定**: 3 处 Mermaid 图（README / architecture-overview / design-spec）保持一致，更新架构时需同步修改
+
+> **最后更新**: 2026-08-24
