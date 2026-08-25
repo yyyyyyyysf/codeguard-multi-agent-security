@@ -67,6 +67,21 @@ def run_sandboxed(
         "HOME": os.environ.get("HOME", "/tmp"),
         "LANG": "en_US.UTF-8",
     }
+    if os.name == "nt":
+        # Windows subprocesses need system vars to bootstrap native runtimes
+        # (OCaml/Node). Without SystemRoot/TEMP etc., semgrep fails at startup
+        # with rc=2 "Unix_error(EUNKNOWNERR -10106, socketpair)".
+        for var in ("SystemRoot", "SystemDrive", "ComSpec", "TEMP", "TMP", "PATHEXT", "WINDIR"):
+            if var in os.environ:
+                safe_env[var] = os.environ[var]
+        # Path.home() on Windows resolves via USERPROFILE (not HOME=/tmp);
+        # semgrep needs it for ~/.cache, otherwise RuntimeError: Could not
+        # determine home directory.
+        for var in ("USERPROFILE", "HOMEDRIVE", "HOMEPATH"):
+            if var in os.environ:
+                safe_env[var] = os.environ[var]
+        if "USERPROFILE" in os.environ:
+            safe_env["HOME"] = os.environ["USERPROFILE"]
     if env:
         safe_env.update(env)
 

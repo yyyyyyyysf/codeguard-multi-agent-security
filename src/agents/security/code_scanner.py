@@ -162,9 +162,13 @@ class CodeScanner:
         if not targets:
             return [], False, ""
 
+        # Use local custom rules (offline, deterministic output).
+        # NOTE: `--config auto` is intentionally avoided: it downloads registry
+        # rules at scan time (network-dependent) and conflicts with `--metrics off`
+        # on semgrep >= 1.174 ("Cannot create auto config when metrics are off").
         args = [
             "scan",
-            "--config", "auto",        # Auto-detect rules based on language
+            "--config", str(self._config_dir),
             "--json",                   # Machine-readable output
             "--no-git-ignore",          # Don't skip .gitignored files
             "--metrics", "off",         # No telemetry

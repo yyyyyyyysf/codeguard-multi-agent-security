@@ -1,0 +1,73 @@
+# CodeGuard custom Semgrep rules (Python, MVP)
+# Used by src/agents/security/code_scanner.py via `--config config/semgrep`.
+# Offline-friendly: no registry download needed, deterministic output.
+
+rules:
+  - id: python-hardcoded-secret
+    languages: [python]
+    severity: ERROR
+    message: >-
+      Hardcoded credential detected in variable '$VAR'.
+      Secrets must be injected via environment variables (see PROJECT_RULES §18.2).
+      Use the credential manager or CI secret store instead.
+    metadata:
+      confidence: high
+      category: security
+      cwe: ["CWE-798"]
+      references:
+        - https://owasp.org/www-community/vulnerabilities/Use_of_hard-coded_password
+    patterns:
+      - pattern-either:
+          - pattern: $VAR = "sk-$SECRET"
+          - pattern: $VAR = "pk-$SECRET"
+          - pattern: $VAR = "ghp_$SECRET"
+          - pattern: $VAR = "AKIA$SECRET"
+          - pattern: $VAR = "-----BEGIN $SECRET"
+      - metavariable-regex:
+          metavariable: $VAR
+          regex: (api[_-]?key|token|secret|password|passwd|credential)
+      - metavariable-regex:
+          metavariable: $SECRET
+          regex: "[A-Za-z0-9_\\-]{8,}"
+
+  - id: python-sql-string-concat
+    languages: [python]
+    severity: ERROR
+    message: >-
+      SQL query built by string concatenation with variable '$VAR'.
+      Use parameterized queries / prepared statements instead (SQL injection risk).
+    metadata:
+      confidence: high
+      category: security
+      cwe: ["CWE-89"]
+      references:
+        - https://owasp.org/www-community/attacks/SQL_Injection
+    pattern-either:
+      - pattern: |
+          $QUERY = "..." + $VAR + "..."
+      - pattern: |
+          $QUERY = "..." + $VAR
+      - pattern: |
+          $CONN.execute("..." + $VAR)
+      - pattern: |
+          $CONN.execute(f"...{$VAR}")
+      - pattern: |
+          $CONN.execute($QUERY)
+
+  - id: python-insecure-hmac-comparison
+    languages: [python]
+    severity: WARNING
+    message: >-
+      HMAC digest compared with `==` (timing attack risk).
+      Use hmac.compare_digest() for constant-time comparison.
+    metadata:
+      confidence: medium
+      category: security
+      cwe: ["CWE-208"]
+    patterns:
+      - pattern-either:
+          - pattern: $A == $B
+          - pattern: $A != $B
+      - metavariable-regex:
+          metavariable: $A
+          regex: ".*(digest|signature|sig|hmac).*"

@@ -14,6 +14,7 @@ COPY pyproject.toml .
 RUN pip install --no-cache-dir pip -U
 
 # Install only runtime deps (skip dev/test for lighter image)
+# NOTE: keep this list in sync with pyproject.toml [project.dependencies]
 RUN pip install --no-cache-dir \
     fastapi>=0.110.0 \
     "uvicorn[standard]>=0.27.0" \
