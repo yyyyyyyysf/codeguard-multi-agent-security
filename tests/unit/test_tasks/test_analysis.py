@@ -82,11 +82,29 @@ class TestRedisFailGracefully:
 class TestAsyncBridge:
     """Test _sync_run_async coroutine bridge."""
 
-    @pytest.mark.asyncio
-    async def test_returns_result(self):
+    def test_returns_result_from_running_loop(self):
+        """_sync_run_async bridges into a running loop (nest_asyncio path).
+
+        Uses an explicit, self-closed loop: running this inside pytest-asyncio's
+        fixture loop would leave that loop unclosed at teardown and emit a
+        DeprecationWarning.
+        """
+        import asyncio
         from src.tasks.analysis import _sync_run_async
-        async def double(x): return x * 2
-        assert _sync_run_async(double(21)) == 42
+
+        async def double(x):
+            return x * 2
+
+        async def caller():
+            return _sync_run_async(double(21))
+
+        loop = asyncio.new_event_loop()
+        try:
+            asyncio.set_event_loop(loop)
+            assert loop.run_until_complete(caller()) == 42
+        finally:
+            loop.close()
+            asyncio.set_event_loop(None)
 
     def test_from_sync_context(self):
         from src.tasks.analysis import _sync_run_async
