@@ -38,6 +38,10 @@ HIGH_CONFIDENCE_RULES = {
     "generic.secrets.security.detected-aws-access-key",
     "python.lang.security.audit.detect-sql-string",
     "python.lang.security.audit.hardcoded-tmp-file",
+    # Custom rules under config/semgrep/ (deterministic patterns)
+    "config.semgrep.python-hardcoded-secret",
+    "config.semgrep.python-sql-string-concat",
+    "config.semgrep.python-insecure-hmac-comparison",
 }
 
 LOW_CONFIDENCE_RULES: set[str] = set()  # Populated from experimental rulesets
@@ -46,6 +50,8 @@ LOW_CONFIDENCE_RULES: set[str] = set()  # Populated from experimental rulesets
 ALWAYS_BLOCKING_RULES = {
     "generic.secrets.security.detected-private-key",
     "generic.secrets.security.detected-aws-access-key",
+    "config.semgrep.python-hardcoded-secret",
+    "config.semgrep.python-sql-string-concat",
 }
 
 

@@ -294,3 +294,16 @@
 - **验证**: `tests/unit/test_agents/test_security/` 40 passed
 
 > **最后更新**: 2026-08-25
+
+---
+
+## 2026-08-25 — 自定义规则置信度分类 + 演示仓库（追加）
+
+- **类型**: 修复 / 工具
+- **内容**:
+  - `code_scanner.py`：自定义规则 ID（`config.semgrep.*`）纳入 `HIGH_CONFIDENCE_RULES`，`python-hardcoded-secret` / `python-sql-string-concat` 加入 `ALWAYS_BLOCKING_RULES`——此前自定义规则全部落 medium 置信度、被豁免规则 auto-waive 不阻断（真实缺口）
+  - 新建演示仓库 `C:\Users\86186\codeguard_demo`（5 个真实漏洞：3 处 SQL 拼接 / 硬编码密钥 / 非恒定时间 HMAC 比较），供演示与自查使用
+  - **演示实测**：`python -m src.cli.main analyze C:\Users\86186\codeguard_demo --no-migration` → **Blocking 2 / Warnings 1 / MERGE BLOCKED**，7s 出结果
+- **验证**: `tests/unit/test_agents/test_security/` 40 passed
+
+> **最后更新**: 2026-08-25
