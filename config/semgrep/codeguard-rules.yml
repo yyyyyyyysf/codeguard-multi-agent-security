@@ -52,7 +52,9 @@ rules:
       - pattern: |
           $CONN.execute(f"...{$VAR}")
       - pattern: |
-          $CONN.execute($QUERY)
+          $CURSOR.execute("..." + $VAR)
+      - pattern: |
+          $CURSOR.execute(f"...{$VAR}")
 
   - id: python-insecure-hmac-comparison
     languages: [python]

@@ -277,3 +277,20 @@
 - **验证**: 全量 pytest **268 passed**（warnings 3→2，剩余为第三方库警告）；commit 数实测 30 并同步 README/HANDOFF
 
 > **最后更新**: 2026-08-25
+
+---
+
+## 2026-08-25 — 自举验证存档 + Semgrep 规则精度修复（追加）
+
+- **类型**: 修复 / 验证
+- **内容**:
+  - **自举扫描存档**：用 CodeGuard 扫描自身（156 文件），结果存档 `docs/verification/self-scan-2026-08-25.json`，复现说明见 `docs/verification/README.md`（对应 PROJECT_RULES §18.3 自举闭环）
+  - **规则精度修复（自举扫描发现）**：
+    - 初版扫描误报 13 条 `python-sql-string-concat`——规则中 `$CONN.execute($QUERY)` 模式过宽，误匹配参数化安全查询（如 `audit_log.py`）
+    - 收紧规则：删除过宽模式，仅保留明确拼接模式（`"..." + $VAR`、`f"...{$VAR}"`）
+    - `code_scanner._parse_semgrep_output`：新增严重度映射 `ERROR→high / WARNING→medium / INFO→low`（此前 Semgrep `error` 永不触发阻断，为真实缺陷）
+    - 测试同步：`test_scanners.py` 两处 severity 断言 `error`→`high`
+  - **修复后复扫**：误报清零（零误报、零阻断）；靶点仓库的 2 条真实 SQL 拼接仍可命中——规则"能抓真、不误伤"
+- **验证**: `tests/unit/test_agents/test_security/` 40 passed
+
+> **最后更新**: 2026-08-25

@@ -112,7 +112,7 @@ class TestCodeScannerHelpers:
         issues = scanner._parse_semgrep_output(raw)
         assert len(issues) == 1
         assert issues[0]["rule_id"] == "python.lang.security.audit.detect-sql-injection"
-        assert issues[0]["severity"] == "error"
+        assert issues[0]["severity"] == "high"  # Semgrep ERROR mapped to high (blocking-capable)
         assert issues[0]["file_path"] == "app.py"
         assert issues[0]["line_number"] == 42
         assert issues[0]["confidence"] == "medium"  # Default before classifier
@@ -303,7 +303,7 @@ class TestCodeScannerWithMockSandbox:
             )
             assert len(issues) == 1
             assert issues[0]["rule_id"] == "python.lang.security.audit.detect-sql-string"
-            assert issues[0]["severity"] == "error"
+            assert issues[0]["severity"] == "high"  # Semgrep ERROR mapped to high (blocking-capable)
             assert not degraded
 
     @pytest.mark.asyncio

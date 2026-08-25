@@ -205,6 +205,11 @@ class CodeScanner:
             check_id = result.get("check_id", "")
             extra = result.get("extra", {})
             severity = extra.get("severity", "medium").lower()
+            # Semgrep severity scale is ERROR/WARNING/INFO; map to CodeGuard's
+            # critical/high/medium so ERROR findings actually block.
+            severity = {"error": "high", "warning": "medium", "info": "low"}.get(
+                severity, severity
+            )
             message = extra.get("message", "")
             fix_lines = extra.get("fix", "")
             start = result.get("start", {})

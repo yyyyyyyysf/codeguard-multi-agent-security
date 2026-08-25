@@ -1,0 +1,60 @@
+{
+  "scan_id": "7978d814-eda2-4f00-9754-79feea22a379",
+  "repo_url": "C:\\Users\\86186\\codeguard",
+  "commit_sha": "efccc56aeda5c98e79481652ac814a673ad3b3e0",
+  "scan_scope": "full",
+  "generated_at": "2026-08-25T09:40:47.320138+00:00",
+  "summary": {
+    "blocking_count": 0,
+    "warning_count": 0,
+    "pass_count": 0,
+    "security_scan_duration_ms": 29365,
+    "migration_scan_duration_ms": 0
+  },
+  "security": {
+    "security_report": {
+      "scan_id": "7978d814-eda2-4f00-9754-79feea22a379",
+      "scan_scope": "full",
+      "rule_set_version": "0.1.0",
+      "cve_db_version": "",
+      "vulnerabilities": [],
+      "code_issues": [],
+      "scan_duration_ms": 29365,
+      "scanned_deps_count": 25,
+      "degraded": false,
+      "degraded_reasons": []
+    },
+    "conflict_decision": {
+      "scan_id": "7978d814-eda2-4f00-9754-79feea22a379",
+      "overall_blocking": false,
+      "decisions": [],
+      "audit_trail": {
+        "entries": [
+          {
+            "timestamp": "2026-08-25T09:40:47.306529+00:00",
+            "action": "conflict_resolution_complete",
+            "detail": {
+              "scan_id": "7978d814-eda2-4f00-9754-79feea22a379",
+              "verdicts": 0
+            },
+            "operator": "system",
+            "evidence_link": null,
+            "row_hash": ""
+          }
+        ]
+      },
+      "executed_at": "2026-08-25T09:40:47.306529+00:00",
+      "executed_by": "auto",
+      "human_intervention_required": false,
+      "pending_human_items": [],
+      "appeal_count": 0
+    }
+  },
+  "migration": null,
+  "pr_comment_markdown": "## CodeGuard 安全分析报告\n> 本次扫描：full · 156 个文件 · 安全扫描耗时 29365ms\n\n\n\n\n\n\n\n\n---\n[查看完整报告](/api/v1/tasks/7978d814-eda2-4f00-9754-79feea22a379/report?format=html) · [管理豁免规则](#)",
+  "full_report_url": null,
+  "degraded": false,
+  "degraded_reasons": [],
+  "appeal_count": 0,
+  "human_intervention_required": false
+}
