@@ -111,7 +111,7 @@ python -m src.cli.main analyze ./my-project --target fastapi:0.100.0:0.110.0
 | Feature | Description |
 |---------|-------------|
 | CVE Scanning | 3-tier cache (Redis -> SQLite -> OSV API), direct/transitive classification |
-| Code Security | Semgrep rules: hardcoded secrets, SQL injection, unsafe deserialization |
+| Code Security | Semgrep (auto rule set, `config/semgrep/` reserved for custom rules): hardcoded secrets, SQL injection, unsafe deserialization |
 | Auto-blocking | PR merge blocked until all `blocking=true` findings are resolved |
 | Human-in-the-loop | Exemption appeals for edge cases, with audit trail |
 | Migration Assessment | Breaking Changes detection (AST rules + LLM-assisted) |
@@ -133,9 +133,9 @@ python -m src.cli.main analyze ./my-project --target fastapi:0.100.0:0.110.0
 ```
 Modules:     14 completed
 Tests:       268 passed
-Agent coverage: 87% avg
-Lines:       ~6,000 Python
-Commits:     20
+Agent coverage: 87% avg (statement coverage, 2026-08-25 re-verified)
+Lines:       ~10,700 Python (wc -l, incl. comments)
+Commits:     30
 ```
 
 ## Tech Stack

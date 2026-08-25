@@ -106,7 +106,7 @@ src/
 ├── tasks/          Celery任务 (异步编排、回调)
 ├── monitoring/     可观测性 (指标埋点、追踪)
 ├── cli/            CLI工具
-└── web/            Web管理后台
+└── web/            Web管理后台 (规划中, MVP 未实现)
 ```
 
 ### 3.2 四个 Agent 权责
@@ -228,7 +228,6 @@ src/
 | `docs/specs/codeguard-v0.1-design-spec.md` | 完整设计规格 | 查阅具体设计细节时 |
 | `docs/architecture-overview.md` | 架构图解（Mermaid 全景图 + 通俗解释） | 快速理解系统全貌 / 给非技术同学讲解时 |
 | `docs/adr/*.md` | 架构决策记录 | 理解技术选型背景时 |
-| `docs/guides/setup-guide.md` | 环境搭建指南 | 首次搭建项目时 |
 | `DEVELOPMENT_LOG.md` | 开发日志 | 了解当前进度和历史改动 |
 
 ---

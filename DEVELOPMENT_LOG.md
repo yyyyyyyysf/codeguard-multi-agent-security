@@ -258,3 +258,22 @@
 - **同步约定**: 3 处 Mermaid 图（README / architecture-overview / design-spec）保持一致，更新架构时需同步修改
 
 > **最后更新**: 2026-08-24
+
+---
+
+## 2026-08-25 — 交付前审查修复（文档 / 依赖 / 扫描链路）
+
+- **类型**: 修复 / 文档 / 规则
+- **内容**:
+  - **文档漂移修复**：`ARCHITECTURE.md` 将 `src/web/` 标注为「规划中, MVP 未实现」并删除失效的 `docs/guides/setup-guide.md` 索引；`PROJECT_RULES.md` 追加 `src/web/` 现状说明（仅追加，未改正文）；`README.md` 修正 Semgrep 规则表述（`config/semgrep/` 为自定义规则目录）
+  - **依赖声明修复**：`pyproject.toml` 补 `tree-sitter-python`（`src/preprocess/parser.py` 硬依赖，此前 `pip install -e .` 装不出）、移除冗余 `openai`（`llm_client` 用 httpx 直连）；`Dockerfile` 增加「与 pyproject dependencies 保持同步」注释
+  - **补 3 个 ADR**：`docs/adr/ADR-001-security-chain-zero-llm.md`、`ADR-002-hybrid-orchestration.md`、`ADR-003-four-agents-selection.md`（此前 PROJECT_RULES 强制要求但目录为空）
+  - **Semgrep 扫描链路修复（含真实取证）**：
+    - 新增 `config/semgrep/codeguard-rules.yml`（3 条自定义规则：hardcoded-secret / SQL 拼接 / hmac 不安全比较），`config/semgrep/` 从空目录变为真实规则库
+    - `src/agents/security/code_scanner.py`：`--config auto` → `--config config/semgrep`（修复新版 semgrep「auto 与 metrics off 冲突」+ 离线确定性输出）
+    - `src/utils/sandbox.py`：Windows 下子进程环境补齐 `SystemRoot/TEMP/USERPROFILE` 等系统变量（修复 semgrep `socketpair` rc=2 与 `Could not determine home directory` 两个运行时错误）
+    - **实测取证**：对含 SQL 注入 / 硬编码密钥靶点的仓库全链路扫描，命中 2 条 `python-sql-string-concat`，`overall_blocking=true`（阻断生效），`degraded=false`
+  - **测试**：`tests/unit/test_tasks/test_analysis.py` 修复 pytest-asyncio unclosed event loop 警告（改用显式管理 loop 测试嵌套分支）
+- **验证**: 全量 pytest **268 passed**（warnings 3→2，剩余为第三方库警告）；commit 数实测 30 并同步 README/HANDOFF
+
+> **最后更新**: 2026-08-25

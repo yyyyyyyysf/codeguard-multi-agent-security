@@ -53,7 +53,7 @@ Total:          268 tests
 ```
 > 注：上表仅列核心模块明细，其余测试来自 storage/preprocess/engine/webhook/monitoring 等模块，全量实测 268 tests（2026-08-24 pytest 全量跑通）。
 
-### Git 历史：18 commits，线性历史，规范化提交
+### Git 历史：30 commits（2026-08-25 实测），线性历史，规范化提交
 
 ---
 

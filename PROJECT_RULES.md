@@ -227,6 +227,8 @@ src/
 └── web/            # Web管理后台
 ```
 
+> **注（2026-08-25 追加）**：`src/web/`（Web 管理后台）为**规划中模块，MVP 未实现**。当前查看分析结果的途径：① CLI 输出（stdout Markdown/JSON + `--output` 存文件）；② `GET /api/v1/tasks/{id}/report`（`format=json|html`）；③ 报告落盘 `REPORT_STORAGE_DIR/{scan_id}/report.{json,html}`。新增该模块前无需改动既有接口，报告/豁免管理均有现成 API。
+
 ### 5.2 依赖规则
 
 - **依赖单向**：上层依赖下层，禁止反向依赖，禁止循环依赖
