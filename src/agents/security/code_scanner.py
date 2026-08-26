@@ -16,6 +16,9 @@ Confidence levels:
 from __future__ import annotations
 
 import json
+import os
+import shutil
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -27,6 +30,24 @@ try:
     HAS_SEMGREP_SDK = True
 except ImportError:
     HAS_SEMGREP_SDK = False
+
+
+def _locate_semgrep() -> str:
+    """Locate the semgrep executable without relying on the ambient PATH.
+
+    Fallback order:
+    1. `semgrep` found on PATH (normal installs).
+    2. The interpreter's own venv Scripts dir (e.g. when CodeGuard itself is
+       run from a venv whose bin dir is not on PATH — double-click .bat, IDE
+       launch, cron). Without this, subprocess raises FileNotFoundError and
+       the scan degrades instantly.
+    """
+    found = shutil.which("semgrep")
+    if found:
+        return found
+    exe = "semgrep.exe" if os.name == "nt" else "semgrep"
+    candidate = Path(sys.executable).resolve().parent / exe
+    return str(candidate) if candidate.exists() else "semgrep"
 
 
 # ------------------------------------------------------------------
@@ -181,7 +202,7 @@ class CodeScanner:
             "--quiet",
         ] + targets
 
-        rc, stdout, stderr = run_tool_safely("semgrep", args, timeout=60)
+        rc, stdout, stderr = run_tool_safely(_locate_semgrep(), args, timeout=60)
 
         if rc != 0 and not stdout:
             # Semgrep returned non-zero with no output -> real failure

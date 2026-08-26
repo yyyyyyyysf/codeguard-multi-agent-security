@@ -307,3 +307,17 @@
 - **验证**: `tests/unit/test_agents/test_security/` 40 passed
 
 > **最后更新**: 2026-08-25
+
+---
+
+## 2026-08-26 — 修复 semgrep 依赖 PATH 导致扫描降级（追加）
+
+- **类型**: 修复
+- **内容**:
+  - **现象**：双击 `run-demo.bat`（cmd 环境）扫描立即降级 `Semgrep SDK failed; results may be incomplete`（9ms），而 Git Bash 环境正常——根因是 `code_scanner` 以裸命令名 `semgrep` 调子进程，cmd 的 PATH 不含 venv `Scripts` 目录 → `FileNotFoundError` → 被 SDK 包装层捕获误报为 SDK 失败
+  - **修复**：新增 `_locate_semgrep()`——`shutil.which("semgrep")` 优先，找不到时回退到 `sys.executable` 同级目录（venv Scripts 下的 `semgrep.exe`），不再依赖环境 PATH
+  - **双保险**：`codeguard_demo/run-demo.bat` 增加 `set PATH=<venv Scripts>;%PATH%`
+  - **验证**：在 PATH 完全不含 venv Scripts 的环境下复跑 → `degraded=False`、命中 3 条、**Blocking 2 / MERGE BLOCKED**
+- **验证**: `tests/unit/test_agents/test_security/` 40 passed
+
+> **最后更新**: 2026-08-26
