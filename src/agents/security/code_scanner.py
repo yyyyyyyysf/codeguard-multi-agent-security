@@ -218,7 +218,31 @@ class CodeScanner:
             return [], degraded, reason
 
         issues = self._parse_semgrep_output(raw)
+        self._fix_snippets_from_source(issues)
         return issues, False, ""
+
+    @staticmethod
+    def _fix_snippets_from_source(issues: list[dict[str, Any]]) -> None:
+        """Overwrite code_snippet with the actual source line.
+
+        Semgrep's `extra.lines` can be unreliable (multi-line patterns /
+        registry metadata). Reading the real line from disk keeps the report
+        truthful: the snippet always shows the exact code that triggered.
+        """
+        for issue in issues:
+            fp = issue.get("file_path", "")
+            line = issue.get("line_number")
+            if not fp or not line:
+                continue
+            try:
+                with open(fp, encoding="utf-8", errors="replace") as f:
+                    src_lines = f.readlines()
+                if 1 <= int(line) <= len(src_lines):
+                    snippet = src_lines[int(line) - 1].strip()
+                    if snippet:
+                        issue["code_snippet"] = snippet[:200]
+            except OSError:
+                continue
 
     # ------------------------------------------------------------------
     # Output parsing

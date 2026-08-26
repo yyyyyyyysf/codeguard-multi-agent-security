@@ -335,3 +335,16 @@
 - **验证**: 全量 pytest 268 passed
 
 > **最后更新**: 2026-08-26
+
+---
+
+## 2026-08-26 — 报告代码片段（code_snippet）可信度修复（追加）
+
+- **类型**: 修复
+- **内容**:
+  - **现象**：报告中 `code_snippet` 显示错误代码（如 demo 里显示 "requires login"，实际文件无此内容）——Semgrep 输出的 `extra.lines` 对多行 pattern 不可靠
+  - **修复**：`code_scanner._fix_snippets_from_source()`——解析后按 `file_path + line_number` 从源文件读取真实代码行覆盖 snippet（读不到时保留原值，不失败）
+  - **验证**：demo 扫描命中 snippet 现为真实行：`L43 query = "SELECT * ..." + q + "'"`、`L52 conn.execute(f"DELETE ... {uid}")`、`L68 return digest == sig`
+- **验证**: `tests/unit/test_agents/test_security/` 40 passed
+
+> **最后更新**: 2026-08-26
