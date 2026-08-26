@@ -3,12 +3,41 @@
 **Multi-Agent Code Repository Security Analysis Platform**
 
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.110+-green.svg)](https://fastapi.tiangolo.com/)
+[![CI](https://github.com/yyyyyyyysf/codeguard-multi-agent-security/actions/workflows/ci.yml/badge.svg)](https://github.com/yyyyyyyysf/codeguard-multi-agent-security/actions/workflows/ci.yml)
 [![LangGraph](https://img.shields.io/badge/LangGraph-0.2+-orange.svg)](https://langchain-ai.github.io/langgraph/)
-[![Tests](https://img.shields.io/badge/tests-268%20passed-brightgreen.svg)]()
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![GitHub](https://img.shields.io/badge/GitHub-Repo-181717?logo=github&logoColor=white)](https://github.com/yyyyyyyysf/codeguard-multi-agent-security)
 
-CodeGuard embeds automated security analysis into your CI/CD pipeline — blocking vulnerabilities at the PR level before they reach production.
+**把安全分析嵌入 CI/CD：PR 提交时自动扫描漏洞与升级风险，高危直接阻断合并——不是事后报告，是风险发生点拦截。**
+
+多 Agent 编排（LangGraph）· 安全链路**零 LLM**（证据链可溯源）· 人在回路兜底 · 268 个测试全绿
+
+## Table of Contents
+
+- [Demo（效果演示）](#demo)
+- [Architecture](#architecture)
+- [Quick Start](#quick-start)
+- [CLI Options](#cli-options)
+- [Features](#features)
+- [API](#api)
+- [Project Stats](#project-stats)
+- [Tech Stack](#tech-stack)
+
+## Demo
+
+对含 5 个真实漏洞的演示仓库（SQL 注入 / 硬编码密钥 / 非恒定时间 HMAC 比较）扫描，约 10 秒：
+
+```
+Blocking:  2 / Warnings: 1 / Passed: 1
+MERGE BLOCKED — fix the issues above before merging.
+```
+
+![scan-result](docs/verification/demo-scan.png)
+
+- 命中 2 条 SQL 注入（Critical，`main.py:L43`，自动阻断）+ 1 条 HMAC 风险（转人工复核）
+- 完整报告自动落盘 `report.json`：每条命中含规则 ID / 文件行号 / **真实代码片段**（证据链可溯源）
+- 自举验证：用 CodeGuard 扫自身，156 文件 **13 项规则零误报**（存档 `docs/verification/self-scan-2026-08-25.json`）
+- 一分钟走读：`docs/verification/demo-guide.md`
 
 ## Architecture
 
@@ -123,13 +152,15 @@ Reports are persisted automatically to `$REPORT_STORAGE_DIR/<scan_id>/report.jso
 
 ## Features
 
+> **为什么安全链路零 LLM？** 可追溯性——每条安全结论绑定 CVE 编号 / Semgrep 规则 ID + 权威来源，黑盒模型做不到（详见 `docs/adr/ADR-001`）。LLM 仅用于迁移评估的代码影响分析（辅助参考，不参与裁决）。
+
 | Feature | Description |
 |---------|-------------|
 | CVE Scanning | 3-tier cache (Redis -> SQLite -> OSV API), direct/transitive classification |
-| Code Security | Semgrep (auto rule set, `config/semgrep/` reserved for custom rules): hardcoded secrets, SQL injection, unsafe deserialization |
+| Code Security | Semgrep custom rules (`config/semgrep/`): hardcoded secrets, SQL injection, unsafe deserialization |
 | Auto-blocking | PR merge blocked until all `blocking=true` findings are resolved |
-| Human-in-the-loop | Exemption appeals for edge cases, with audit trail |
-| Migration Assessment | Breaking Changes detection (AST rules + LLM-assisted) |
+| Human-in-the-loop | Exemption appeals for edge cases, fail-safe default block on timeout (24h) |
+| Migration Assessment | AST rules + LLM-assisted breaking-change detection |
 | Zero-LLM Security | Security conclusions from deterministic rules + authoritative databases only |
 
 ## API
@@ -150,7 +181,8 @@ Modules:     14 completed
 Tests:       268 passed
 Agent coverage: 87% avg (statement coverage, 2026-08-25 re-verified)
 Lines:       ~10,700 Python (wc -l, incl. comments)
-Commits:     30
+Core scan:   ~40 ms (3 deps, 2 files, local Semgrep rules)
+Commits:     40
 ```
 
 ## Tech Stack
@@ -166,15 +198,6 @@ Commits:     30
 | Storage | SQLite (MVP) + Redis |
 | Deployment | Docker Compose |
 
-## Development
+---
 
-```bash
-# Install dev dependencies
-pip install -e ".[dev]"
-
-# Run all tests
-python -m pytest tests/ -v
-
-# Run specific agent tests
-python -m pytest tests/unit/test_agents/test_security/ -v
-```
+> 技术选型与设计决策：`docs/adr/`（零 LLM 安全链 / 混合编排 / 四 Agent 划分）· 架构图解：`docs/architecture-overview.md`（面向非技术读者）· 演示指南：`docs/verification/demo-guide.md`

@@ -348,3 +348,17 @@
 - **验证**: `tests/unit/test_agents/test_security/` 40 passed
 
 > **最后更新**: 2026-08-26
+
+---
+
+## 2026-08-26 — OSV CVE 链路修复（版本规范化 + ecosystem 大小写）+ 真实仓库扫描
+
+- **类型**: 修复 / 验证
+- **内容**:
+  - **发现（扫真实仓库 medical-rag-agent 时）**：OSV 查询全部 400，CVE 扫描实际一直空转
+  - **Bug 1 版本规范化**：依赖文件里的 `==0.110.0`、`latest` 被原样传给 OSV API → 400。新增 `OSVClient._normalize_version()`：剥离 `==/>=/<=/>/</~/^` 等操作符前缀；`latest/*` 等不可查询占位符返回 None 跳过
+  - **Bug 2 ecosystem 大小写**：内部枚举 `Ecosystem.PYPI.value = "pypi"`（小写），OSV API 要求 `PyPI` → 400 `invalid ecosystem`。新增 `_OSV_ECOSYSTEM` 映射（pypi→PyPI / maven→Maven / cargo→crates.io 等），不动内部枚举（避免影响缓存键）
+  - **修复后实测**：`query_vulns("fastapi", "==0.110.0")` 返回 200；完整扫描 medical-rag-agent（真实仓库，23 依赖）→ **vuln_count=103、Blocking 103、MERGE BLOCKED、degraded=False**（45.7s），存档 `docs/verification/scan-medical-rag-agent.json`
+- **验证**: storage 测试 3 passed
+
+> **最后更新**: 2026-08-26
