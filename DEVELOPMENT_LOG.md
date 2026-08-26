@@ -321,3 +321,17 @@
 - **验证**: `tests/unit/test_agents/test_security/` 40 passed
 
 > **最后更新**: 2026-08-26
+
+---
+
+## 2026-08-26 — CLI 报告自动落盘 + Windows /tmp 路径修复（追加）
+
+- **类型**: 修复 / 功能
+- **内容**:
+  - **CLI 报告自动落盘**：此前 CLI 模式报告只打印不存盘（reporter 的 `_report_store` 默认 None，仅 API/Celery 传了 `LocalFileReportStorage`）。现 CLI 在分析完成后自动用 `LocalFileReportStorage` 保存 `report.json` + `pr_comment.md` 到 `REPORT_STORAGE_DIR/<scan_id>/`，终端打印落盘路径
+  - **Windows /tmp 路径修复**：Windows 原生 Python 把 `/tmp/x` 解析为 `C:\tmp\x`（盘符根）而非 `%TEMP%`——`LocalFileReportStorage._resolve_base()` 在 Windows 下将 `/tmp/` 前缀映射到 `%TEMP%`，CLI 与 API 模式同时受益
+  - **演示指南存档**：新增 `docs/verification/demo-guide.md`（演示素材/跑法/预期输出/报告位置/CLI-vs-API-vs-Celery/降级解释/讲解口径/常见坑速查）
+  - **验证**：跑 demo → `Report persisted to: %TEMP%\codeguard_reports\<scan_id>\`，目录含 `report.json` + `pr_comment.md`
+- **验证**: 全量 pytest 268 passed
+
+> **最后更新**: 2026-08-26

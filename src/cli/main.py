@@ -135,9 +135,11 @@ def analyze(
         vuln_count = len(security_report.get("vulnerabilities", []))
         issue_count = len(security_report.get("code_issues", []))
 
-        return report, overall_blocking, vuln_count, issue_count
+        return report, overall_blocking, vuln_count, issue_count, task_id
 
-    report, overall_blocking, vuln_count, issue_count = asyncio.run(run_analysis())
+    report, overall_blocking, vuln_count, issue_count, task_id = asyncio.run(
+        run_analysis()
+    )
 
     # Output
     typer.echo("")
@@ -170,6 +172,20 @@ def analyze(
             encoding="utf-8",
         )
         typer.echo(f"\n  Report saved to: {output_path}")
+
+    # Persist to report storage (same layout as API/Celery mode):
+    # {REPORT_STORAGE_DIR}/{scan_id}/report.json + pr_comment.md
+    try:
+        from src.storage.report_store import LocalFileReportStorage
+
+        storage = LocalFileReportStorage()
+        storage.save_json(task_id, report)
+        storage.save_markdown(
+            task_id, report.get("pr_comment_markdown", ""), filename="pr_comment.md"
+        )
+        typer.echo(f"\n  Report persisted to: {storage._base / task_id}")
+    except Exception as exc:  # non-fatal: persistence must not break the scan
+        typer.echo(f"\n  (report persistence skipped: {exc})")
 
     if overall_blocking:
         raise typer.Exit(code=1)

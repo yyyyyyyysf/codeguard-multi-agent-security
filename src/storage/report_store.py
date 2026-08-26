@@ -64,10 +64,27 @@ class LocalFileReportStorage(ReportStorage):
     """
 
     def __init__(self, base_dir: str | None = None) -> None:
-        self._base = Path(
+        self._base = self._resolve_base(
             base_dir or os.getenv("REPORT_STORAGE_DIR", "/tmp/codeguard_reports")
         )
         self._base.mkdir(parents=True, exist_ok=True)
+
+    @staticmethod
+    def _resolve_base(base_dir: str) -> Path:
+        """Resolve the storage dir, mapping POSIX /tmp to %TEMP% on Windows.
+
+        Docker/Linux treat /tmp literally, but a native Windows Python resolves
+        `/tmp/x` to `C:\\tmp\\x` (drive root), which is almost never intended.
+        """
+        p = Path(base_dir)
+        if os.name == "nt":
+            parts = p.parts
+            # WindowsPath("/tmp/x").parts == ("\\", "tmp", "x")
+            if len(parts) > 1 and parts[0] in ("/", "\\") and parts[1] == "tmp":
+                return Path(os.environ.get("TEMP", "C:/Windows/Temp")) / "/".join(
+                    parts[2:]
+                )
+        return p
 
     def _scan_dir(self, scan_id: str) -> Path:
         d = self._base / scan_id
