@@ -106,6 +106,21 @@ python -m src.cli.main analyze ./my-project
 python -m src.cli.main analyze ./my-project --target fastapi:0.100.0:0.110.0
 ```
 
+### CLI options
+
+| Option | Description |
+|--------|-------------|
+| `<repo>` | Required. Path to a local git repository (must contain `.git`) |
+| `--no-migration` | Skip AI migration assessment (fast, no LLM key needed) |
+| `--target <framework:from:to>` | Enable migration assessment, e.g. `fastapi:0.100.0:0.110.0` |
+| `--json` | Print raw JSON instead of Markdown summary |
+| `--output <path>` | Also save the full report as JSON to a file |
+| `--scan-type full\|diff` | Full scan or diff-only (default: `full`) |
+| `--branch <name>` | Branch to scan (default: `main`) |
+| `--block-severity high\|critical` | Blocking threshold (default: `high`) |
+
+Reports are persisted automatically to `$REPORT_STORAGE_DIR/<scan_id>/report.json` (+ `pr_comment.md`). See `docs/verification/demo-guide.md` for a full walkthrough.
+
 ## Features
 
 | Feature | Description |
