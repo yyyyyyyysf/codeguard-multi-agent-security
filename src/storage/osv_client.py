@@ -7,6 +7,7 @@ Endpoint: POST /v1/query
 from __future__ import annotations
 
 import os
+import re
 from typing import Any
 
 import httpx
@@ -14,6 +15,15 @@ import httpx
 from src.core.constants import OSV_API_TIMEOUT
 from src.core.errors import OSVApiUnavailableError
 from src.core.models import Ecosystem
+
+# Internal enum value -> canonical OSV API ecosystem name.
+_OSV_ECOSYSTEM = {
+    "pypi": "PyPI",
+    "npm": "npm",
+    "maven": "Maven",
+    "go": "Go",
+    "cargo": "crates.io",
+}
 
 
 class OSVClient:
@@ -23,6 +33,25 @@ class OSVClient:
         async with OSVClient() as client:
             vulns = await client.query_vulns("fastapi", "0.100.0", Ecosystem.PYPI)
     """
+
+    @staticmethod
+    def _normalize_version(version: str) -> str | None:
+        """Strip version-specifier operators, or return None if unqueryable.
+
+        Examples:
+            "==0.110.0" -> "0.110.0"
+            ">=2.0"     -> "2.0"
+            "latest"    -> None (skip)
+            "*"         -> None (skip)
+        """
+        v = version.strip()
+        if not v or v.lower() in ("latest", "*", "any"):
+            return None
+        m = re.match(r"^[<>=!~^ ]*([0-9][A-Za-z0-9._\-]*)$", v)
+        if m:
+            return m.group(1)
+        stripped = re.sub(r"^[<>=!~^ ]+", "", v)
+        return stripped or None
 
     def __init__(
         self,
@@ -70,10 +99,22 @@ class OSVClient:
         Raises:
             OSVApiUnavailableError: If the API is unreachable or returns an error.
         """
+        # Normalize version specifiers: requirement files may carry operators
+        # ("==0.110.0", ">=2.0") or non-version placeholders ("latest", "*").
+        # OSV expects a plain version; unqueryable specifiers are skipped.
+        version = self._normalize_version(version)
+        if version is None:
+            return []
+
+        # OSV API requires canonical ecosystem names (e.g. "PyPI"), while the
+        # internal Ecosystem enum uses lowercase ("pypi"). Map them here so the
+        # CVE lookup does not 400 with "invalid ecosystem".
+        ecosystem_name = _OSV_ECOSYSTEM.get(ecosystem.value, ecosystem.value)
+
         request_body = {
             "package": {
                 "name": package_name,
-                "ecosystem": ecosystem.value,
+                "ecosystem": ecosystem_name,
             },
             "version": version,
         }
