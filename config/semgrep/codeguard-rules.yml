@@ -43,10 +43,23 @@ rules:
       references:
         - https://owasp.org/www-community/attacks/SQL_Injection
     pattern-either:
-      - pattern: |
-          $QUERY = "..." + $VAR + "..."
-      - pattern: |
-          $QUERY = "..." + $VAR
+      # Assignment patterns are only SQL-flavored when the variable name
+      # suggests a query (avoids false positives on e.g. generated class
+      # names like `"Body_" + name`).
+      - patterns:
+          - pattern: |
+              $QUERY = "..." + $VAR + "..."
+          - metavariable-regex:
+              metavariable: $QUERY
+              regex: (?i).*(query|sql|select|insert|update|delete|statement).*
+      - patterns:
+          - pattern: |
+              $QUERY = "..." + $VAR
+          - metavariable-regex:
+              metavariable: $QUERY
+              regex: (?i).*(query|sql|select|insert|update|delete|statement).*
+      # Executor-context patterns are always SQL: the concatenated string is
+      # passed directly to the DB driver.
       - pattern: |
           $CONN.execute("..." + $VAR)
       - pattern: |
