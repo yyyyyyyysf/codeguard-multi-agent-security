@@ -182,7 +182,7 @@ Tests:       268 passed
 Agent coverage: 87% avg (statement coverage, 2026-08-25 re-verified)
 Lines:       ~10,700 Python (wc -l, incl. comments)
 Core scan:   ~40 ms (3 deps, 2 files, local Semgrep rules)
-Commits:     40
+Commits:     42
 ```
 
 ## Tech Stack
